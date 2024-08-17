@@ -11,6 +11,9 @@ def validate(config: Dict) -> Dict:
     if 'browser' in config:
         b = config['browser']
 
+        if type(b) is not dict:
+            raise ValueError(Fore.RED + 'Invalid configuration value at ' + Fore.CYAN + 'browser, ' + Fore.RED + 'expected an object')
+
         if 'type' in b and type(b['type']) is not str:
             raise ValueError(Fore.RED + 'Invalid configuration value at ' + Fore.CYAN + 'browser.type, ' + Fore.RED + 'expected a string')
         
@@ -26,5 +29,11 @@ def validate(config: Dict) -> Dict:
         if 'block' in b and not list_of(str, b['block']):
             raise ValueError(Fore.RED + 'Invalid configuration value at ' + Fore.CYAN + 'browser.block, ' + Fore.RED + 'expected a list of strings')
     
+    if 'scrawl' in config:
+        s = config['scrawl']
+        
+        if type(s) is not list:
+            raise ValueError(Fore.RED + 'Invalid configuration value at ' + Fore.CYAN + 'scrawl, ' + Fore.RED + 'expected a list')
+
     
     return config

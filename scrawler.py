@@ -6,7 +6,7 @@ from colorama import Fore
 from playwright.sync_api import sync_playwright, Browser, BrowserContext, BrowserType, Page, Route
 from utils import keypath
 from utils.config import validate
-from utils.helpers import is_file_type
+from utils.helpers import is_file_type, flatten_list
 from typing import Dict, List, Literal
 
 
@@ -40,7 +40,17 @@ class Scrawler():
         self.__launch_browser()
 
         for pg in self.__config['scrawl']:
-            print(pg)
+            links = self.__resolve_page_link(pg['link'])
+            
+            for link in links:
+                print(Fore.GREEN + 'Opening a new page: ' + Fore.BLUE + link['url'] + Fore.RESET)
+
+                page = self.__new_page(link['url'])
+                self.__state['vars'] |= link['metadata']
+                self.__state['vars']['_url'] = page.url
+
+                print(Fore.YELLOW + 'Closing page: ' + Fore.BLUE + link['url'] + Fore.RESET)
+                page.close()
 
 
     def __launch_browser(self):
@@ -97,3 +107,16 @@ class Scrawler():
             route.abort()
         else:
             route.continue_()
+    
+    
+    def __resolve_page_link(self, url: str | List) -> List:
+        urls: List[str] = [url] if type(url) is str else url
+        links: List[str] = []
+
+        for url in urls:
+            if url[0] == '$':
+                links.append(self.__config['links'].get(url[1:], []))
+            else:
+                links.append({'url': url, 'metadata': {}})
+
+        return flatten_list(links)
