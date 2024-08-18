@@ -1,16 +1,19 @@
 r"""Scrawler simplifies scraping on the web"""
 
 
-import json, yaml
+import json, yaml, re
 from colorama import Fore
-from playwright.sync_api import sync_playwright, Browser, BrowserContext, BrowserType, Page, Route
-from utils import keypath
+from playwright.sync_api import sync_playwright, Browser, BrowserContext, Locator, Page, Route, TimeoutError
+from slugify import slugify
+from typing import Any, Dict, List, Literal, Tuple
+from utils import keypath, notation
 from utils.config import validate
-from utils.helpers import is_file_type, flatten_list
-from typing import Dict, List, Literal
+from utils.helpers import is_file_type, flatten_list, pick
+from pprint import pprint
 
 
 Config = Dict[Literal['browser', 'scrawl'], Dict]
+Action = Dict[Literal['type', 'delay', 'wait', 'screenshot', 'dispatch'], str | int | bool]
 
 
 class Scrawler():
@@ -46,12 +49,222 @@ class Scrawler():
                 print(Fore.GREEN + 'Opening a new page: ' + Fore.BLUE + link['url'] + Fore.RESET)
 
                 page = self.__new_page(link['url'])
-                self.__state['vars'] |= link['metadata']
+                self.__state['vars'] = link.get('metadata', {})
                 self.__state['vars']['_url'] = page.url
 
+                self.__interact(page, pg['nodes'])
+
                 print(Fore.YELLOW + 'Closing page: ' + Fore.BLUE + link['url'] + Fore.RESET)
+
                 page.close()
 
+    
+    def __interact(self, page: Page, nodes: List[Dict]):
+        for node in nodes:
+            print(Fore.GREEN + 'Interacting with: ' + Fore.WHITE + node['selector'] + Fore.RESET)
+            
+            self.__state['vars']['_node'] = re.sub(':', '-', node.get('name', node['selector']))
+            locs = page.locator(node['selector']).all()
+            all: bool = node.get('all', False)
+            rng_start, rng_stop, rng_step = self.__resolve_range(node.get('range', []), len(locs))
+            locs = locs[rng_start:rng_stop]
+
+            if not all: locs = locs[0:1]
+
+            extracted_links = []
+            extracted_data = []
+
+            for i in range(0, len(locs), rng_step):
+                self.__state['vars']['_nth'] = i
+                loc = locs[i]
+
+                self.__node_actions(node.get('actions', []), loc)
+
+                if 'extract' in node and 'links' in node['extract']:
+                    extracted_links.append(self.__extract_link(loc, node['extract']['links']))
+
+                if 'extract' in node and 'data' in node['extract']:
+                    extracted_data.append(self.__extract_data(loc, node['extract']['data']))
+
+                if 'nodes' in node:
+                    self.__interact(page, node['nodes'])
+            
+            if 'extract' in node:
+                self.__save_extract(
+                    node['extract'],
+                    extracted_links,
+                    extracted_data,
+                    node.get('all', False)
+                )
+
+    
+    def __extract_link(self, loc: Locator, opts: Dict) -> Dict:
+        link = {
+            'url': self.__evaluate(opts['value'], loc, simplified_attr=True),
+            'metadata': {}
+        }
+
+        if 'metadata' in opts:
+            for key, val_notn in opts['metadata'].items():
+                link['metadata'][key] = self.__evaluate(val_notn, loc, simplified_attr=True)
+                
+        return link
+
+
+    def __extract_data(self, loc: Locator, opts: Dict) -> str | List | Dict:
+        value = None
+
+        if type(opts['value']) is str:
+            value = self.__evaluate(opts['value'], loc, simplified_attr=True)
+        elif type(opts['value']) is list:
+            value = [self.__evaluate(attr, loc, simplified_attr=True) for attr in opts['value']]
+        elif type(opts['value']) is dict:
+            value = {key: self.__evaluate(attr, loc, simplified_attr=True) for key, attr in opts['value'].items()}
+
+        return value
+    
+
+    def __save_extract(self, ext: Dict, links: List, data_values: List, all: bool = True) -> None:
+        if 'links' in ext:
+            print(Fore.GREEN + 'Extracting links' + Fore.RESET)
+            if keypath.has_key(self.__state['links'], ext['links']['name']):
+                self.__state['links'][ext['links']['name']] = self.__state['links'][ext['links']['name']] + links
+            else:
+                self.__state['links'][ext['links']['name']] = links
+    
+        if 'data' in ext:
+            print(Fore.GREEN + 'Extracting data' + Fore.RESET)
+            data = self.__state['data']
+            path = keypath.resolve(
+                ext['data']['name'],
+                data,
+                self.__state['vars'],
+                special_key=r'#(\w+)(=|!=|>=|<=|>|<)(\$)?(\w+)',
+                resolve_key=notation.find_item_key
+            )
+            value = data_values if all else data_values[0]
+
+            keypath.assign(value, data, path, merge=True)
+
+    
+    def __node_actions(self, actions: List[Action], loc: Locator):
+        """Perform listed actions on the selected node"""
+        
+        for action in actions:
+            # pre-evaluate and cache screenshot file path,
+            # before the node is removed or made inaccesible by action event
+            screenshot_path = ''
+
+            if 'screenshot' in action:
+                screenshot_path = self.__evaluate(action['screenshot'], loc)
+
+            if 'delay' in action:
+                loc.page.wait_for_timeout(action['delay'])
+
+            if action.get('dispatch', False):
+                loc.dispatch_event(action['type'])
+            else:
+                match action['type']:
+                    case 'click':
+                        loc.click(**pick(action.get('options', {}), {
+                            'button': True,
+                            'modifiers': True,
+                        }))
+                    case _:
+                        raise ValueError(f'The "{action['do']}" is not supported')
+                    
+            if 'wait' in action:
+                loc.page.wait_for_timeout(action['wait'])
+
+            if 'screenshot' in action:
+                loc.page.screenshot(path=screenshot_path, full_page=True)
+
+    
+    def __evaluate(self, string: str, loc: Locator, simplified_attr: bool = False) -> str:
+        """Replace all variable notations in given string with values"""
+        
+        var_names: List = set(re.findall(r'(\$(var|attr)\{\s*(_?\w+)((?:\s*\|\s*\w+)*)?\s*\})', string))
+
+        if simplified_attr and not len(var_names):
+            return self.__attribute(string, loc)
+
+        for notn, typ, var_name, utils in var_names:
+            value = notn
+
+            match typ:
+                case 'attr':
+                    value = self.__attribute(var_name, loc)
+                case 'var':
+                    value = str(self.__var(var_name, notn))
+                    
+            string = re.sub(
+                re.escape(notn),
+                self.__apply_utils(notation.parse_utils(utils), value),
+                string
+            )
+
+        return string
+    
+
+    def __apply_utils(self, utils: List[Tuple[str, List]], val: str):   
+        value = val
+        for name, args in utils:
+            match name.strip():
+                case 'lowercase':
+                    value = str(value).lower()
+                case 'slug':
+                    value = slugify(str(value))
+        
+        return value
+    
+
+    def __var(self, name: str, default: Any = None) -> Any:
+        if name in self.__state['vars']:
+            return self.__state['vars'][name]
+        
+        return default
+    
+    
+    def __attribute(self, node_attr: str | Dict, loc: Locator) -> str | None:
+        values = []
+        locs = [loc]
+
+        if type(node_attr) is str:
+            attr, selector = notation.parse_value(node_attr)
+            node_attr = {'attribute': attr, 'selector': selector or None}
+
+        all = node_attr.get('all', False)
+        selector = node_attr.get('selector', None)
+        attr = node_attr.get('attribute', '')
+        utils = notation.parse_utils(attr)
+        attr, _ = notation.parse_value(attr)
+        
+        if not attr : raise ValueError(f'Attribute to extract not define at {loc}')
+
+        if selector:
+            locs = loc.locator(selector).all()
+
+        if not all: locs = locs[0:1]
+
+        for loc in locs:
+            value = None
+            try:
+                if attr in ['href', 'src']:
+                    value = loc.get_attribute(attr)
+                elif attr == 'text':
+                    value = loc.inner_text()
+            except TimeoutError as e:
+                selector = selector if selector else self.__state['vars']['_node']
+                raise TimeoutError(Fore.RED + 'Node is inaccessible or not visible: ' + Fore.MAGENTA + f'{selector}' + Fore.RESET)
+
+            if len(utils): value = self.__apply_utils(value, utils)
+
+            values.append(value)
+
+        if not all: return dict(enumerate(values)).get(0, '')
+
+        return values
+        
 
     def __launch_browser(self):
         playwright = sync_playwright().start()
@@ -109,14 +322,28 @@ class Scrawler():
             route.continue_()
     
     
-    def __resolve_page_link(self, url: str | List) -> List:
-        urls: List[str] = [url] if type(url) is str else url
-        links: List[str] = []
+    def __resolve_page_link(self, url: str | Dict | List[str | Dict]) -> List:
+        urls: List[str | dict] = [url] if type(url) in [str, dict] else url
+        links: List[Dict] = []
 
         for url in urls:
-            if url[0] == '$':
-                links.append(self.__config['links'].get(url[1:], []))
+            if type(url) is dict:
+                links.append(url)
+            elif url[0] == '$':
+                links += self.__config['links'].get(url[1:], [])
             else:
                 links.append({'url': url, 'metadata': {}})
 
-        return flatten_list(links)
+        return links
+    
+    
+    def __resolve_range(self, range: List, max: int) -> Tuple[int, int, int]:
+        rng = dict(enumerate(range))
+        rng_start: int = rng.get(0, 0)
+        rng_start = 0 if rng_start == '_' else rng_start
+        rng_stop: int = rng.get(1, max)
+        rng_stop = max if rng_stop == '_' else rng_stop
+        rng_step: int = rng.get(2, 1)
+        rng_step = 1 if rng_step == '_' else rng_step
+
+        return (rng_start, rng_stop, rng_step)

@@ -1,7 +1,7 @@
 """Utility helper functions"""
 
 import re
-from typing import List, Literal
+from typing import Dict, List, Literal, Tuple
 
 
 def flatten_list(l: List) -> List:
@@ -26,3 +26,19 @@ def is_file_type(typ: Literal['yaml', 'json'], filename: str) -> bool:
         return True
     
     return False
+
+
+def pick(obj: Dict, key_map: Dict[str, str | bool] = None) -> Dict:
+    _obj = {}
+    keys = [] if not key_map else key_map.keys()
+
+    for key, value in obj.items():
+        if key_map:
+            if key not in keys or not key_map[key]: continue
+        
+            key = key_map[key]
+
+        _obj[key] = value
+
+    return _obj
+        

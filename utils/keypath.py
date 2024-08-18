@@ -1,5 +1,5 @@
 import re
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 def split(path: str, delimiter: str = '.') -> List[str]:
     sanitized_path = re.sub(r'\]+$', '', path)
@@ -29,6 +29,72 @@ def get(
         value = value[key]
 
     return value
+
+
+def assign(
+    value: Any,
+    obj: List | Dict,
+    path: str | List[str],
+    delimiter: str = '.',
+    merge: bool = False
+):
+    if type(path) == str:
+        path = split(path, delimiter)
+        
+    _obj = obj
+    size = len(path)
+    if not size: return _obj
+    
+    for i, key in enumerate(path):
+        if i == size - 1:
+            if merge and has_key(_obj, key) and type(_obj[key] == type(value)):
+                # pprint(value, indent=2, depth=2)
+                if type(value) in [str, int, list]:
+                    _obj[key] += value
+                elif type(value) == dir:
+                    _obj[key] |= value
+            else: _obj[key] = value
+        else:
+            _obj = _obj[key]
+
+    return obj
+
+
+def resolve(
+    path: str|List[str],
+    obj: List | Dict,
+    vars: Dict = {},
+    delimiter: str = '.',
+    special_key: str = None,
+    resolve_key: Callable = lambda k:k,
+    strict: bool = False
+) -> List:
+    if type(path) == str:
+        path = split(path, delimiter)
+    
+    if not len(path): return path
+
+    resolved_path = []
+    value = obj
+
+    for i in range(len(path)):
+        key = path[i]
+
+        if special_key and resolve_key:
+            match = re.search(special_key, key)
+
+            if match: key = resolve_key(key, match, value, vars, obj)
+            
+        if not ((type(value) is list or type(value) is dict) and has_key(value, key)):
+            if strict: raise KeyError(f'Unable to resolve key "{key}"')
+            else:
+                resolved_path.append(key)
+                continue
+
+        value = value[key]
+        resolved_path.append(key)
+
+    return resolved_path
 
 
 def has_key(obj, key) -> bool:

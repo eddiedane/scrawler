@@ -20,6 +20,12 @@ def validate(config: Dict) -> Dict:
         if 'show' in b and type(b['show']) is not bool:
             raise ValueError(Fore.RED + 'Invalid configuration value at ' + Fore.CYAN + 'browser.show, ' + Fore.RED + 'expected and boolean')
         
+        if 'timeout' in b and type(b['timeout']) is not int:
+            raise ValueError(Fore.RED + 'Invalid configuration value at ' + Fore.CYAN + 'browser.timeout, ' + Fore.RED + 'expected and integer')
+        
+        if 'ready_on' in b and b['ready_on'] not in ["load", "domcontentloaded", "networkidle", "commit"]:
+            raise ValueError(Fore.RED + 'Invalid configuration value at ' + Fore.CYAN + 'browser.ready_on, ' + Fore.RED + 'expected a string with a value of either "load", "domcontentloaded", "networkidle" or "commit"')
+        
         if 'slowdown' in b and type(b['slowdown']) is not int:
             raise ValueError(Fore.RED + 'Invalid configuration value at ' + Fore.CYAN + 'browser.slowdown, ' + Fore.RED + 'expected and integer')
         
