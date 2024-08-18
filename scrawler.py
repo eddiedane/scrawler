@@ -210,6 +210,9 @@ class Scrawler():
         value = val
         for name, args in utils:
             match name.strip():
+                case 'prepend':
+                    if len(args) > 0:
+                        value = f'{args[0]}{value or ''}'
                 case 'lowercase':
                     value = str(value).lower()
                 case 'slug':

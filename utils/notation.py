@@ -66,7 +66,7 @@ def find_item_key(key, match, value, vars, _):
 
     for k, v in items:
         found = False
-        # print('#' * 50, key, v)
+
         match operator:
             case '=': found = v[sub_key] == operand
             case '!=': found = v[sub_key] != operand
@@ -78,7 +78,5 @@ def find_item_key(key, match, value, vars, _):
         
         if found: return k
     else:
-        # pprint(vars, indent=2, depth=2)
-        # pprint(value, indent=2, depth=2)
         raise ValueError(Fore.RED + 'No match found at ' + Fore.CYAN + f'"{key}"' + Fore.RED + ' when operand is ' + Fore.BLUE + f'"{operand}"' + Fore.RESET)
     
