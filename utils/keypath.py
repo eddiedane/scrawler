@@ -48,7 +48,6 @@ def assign(
     for i, key in enumerate(path):
         if i == size - 1:
             if merge and has_key(_obj, key) and type(_obj[key] == type(value)):
-                # pprint(value, indent=2, depth=2)
                 if type(value) in [str, int, list]:
                     _obj[key] += value
                 elif type(value) == dir:

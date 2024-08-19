@@ -1,7 +1,7 @@
 r"""Scrawler simplifies scraping on the web"""
 
 
-import json, yaml, re
+import json, yaml, re, os
 from colorama import Fore
 from playwright.sync_api import sync_playwright, Browser, BrowserContext, Locator, Page, Route, TimeoutError
 from slugify import slugify
@@ -9,7 +9,6 @@ from typing import Any, Dict, List, Literal, Tuple
 from utils import keypath, notation
 from utils.config import validate
 from utils.helpers import is_file_type, flatten_list, pick
-from pprint import pprint
 
 
 Config = Dict[Literal['browser', 'scrawl'], Dict]
@@ -21,7 +20,7 @@ class Scrawler():
         self.__config = validate(config)
         self.__browser: Browser = None
         self.__browser_context: BrowserContext = None
-        self.__state = {'data': {}, 'vars': {}, 'links': {}}
+        self.__state = {'data': {}, 'vars': {}, 'links': {}, 'internal': {}}
 
 
     def go(self):
@@ -42,7 +41,9 @@ class Scrawler():
     def __scrawl(self):
         self.__launch_browser()
 
-        for pg in self.__config['scrawl']:
+        if 'scrawl' not in self.__config or 'pages' not in self.__config['scrawl']: return
+
+        for pg in self.__config['scrawl']['pages']:
             links = self.__resolve_page_link(pg['link'])
             
             for link in links:
@@ -52,11 +53,57 @@ class Scrawler():
                 self.__state['vars'] = link.get('metadata', {})
                 self.__state['vars']['_url'] = page.url
 
-                self.__interact(page, pg['nodes'])
+                if 'repeat' in pg:
+                    repeat = pg['repeat']
+
+                    if 'times' in repeat:
+                        for i in range(repeat['times']):
+                            self.__interact(page, repeat['nodes'])
+                    elif 'while' in repeat:
+                        while not self.__should_repeat(page, repeat['while']):
+                            self.__interact(page, repeat['nodes'])
+                else:
+                    self.__interact(page, pg['nodes'])
 
                 print(Fore.YELLOW + 'Closing page: ' + Fore.BLUE + link['url'] + Fore.RESET)
 
                 page.close()
+
+        print(Fore.YELLOW + 'Closing browser' + Fore.RESET)
+        self.__browser_context.close()
+        self.__browser.close()
+        self.__output()
+
+
+    def __output(self):
+        filepath = self.__config.get('scrawl', {}).get('output', None)
+
+        if not filepath: return
+
+        dir = os.path.dirname(filepath)
+        data = self.__state['data']
+
+        if dir: os.makedirs(dir, exist_ok=True)
+
+        with open(filepath, 'w') as stream:
+
+            if is_file_type('yaml', filepath):
+                print(Fore.GREEN + 'Outputing data to YAML: ' + Fore.BLUE + filepath + Fore.RESET)
+                yaml.dump(data, stream)
+
+            if is_file_type('json', filepath):
+                print(Fore.GREEN + 'Outputing data to JSON: ' + Fore.BLUE + filepath + Fore.RESET)
+                json.dump(data, stream, indent=2, ensure_ascii=False)
+
+
+    def __should_repeat(self, page: Page, opts: Dict) -> bool:
+        loc = page.locator(opts['selector']).first
+
+        if 'exists' in opts and bool(loc.count()) == opts['exists']: return True
+        
+        if 'disabled' in opts and loc.is_disabled() == opts['disabled']: return True
+
+        return False
 
     
     def __interact(self, page: Page, nodes: List[Dict]):
@@ -139,7 +186,7 @@ class Scrawler():
                 ext['data']['name'],
                 data,
                 self.__state['vars'],
-                special_key=r'#(\w+)(=|!=|>=|<=|>|<)(\$)?(\w+)',
+                special_key=r'\*\{(\w+)(=|!=|>=|<=|>|<)(\$)?(\w+)\}',
                 resolve_key=notation.find_item_key
             )
             value = data_values if all else data_values[0]
@@ -164,6 +211,8 @@ class Scrawler():
             if action.get('dispatch', False):
                 loc.dispatch_event(action['type'])
             else:
+                if not loc.is_visible():
+                    print(Fore.YELLOW + 'Action may fail due to node being inaccessible or not visible: ' + Fore.WHITE + f'{self.__state['vars']['_node']}@{action['type']}')
                 match action['type']:
                     case 'click':
                         loc.click(**pick(action.get('options', {}), {
@@ -182,13 +231,14 @@ class Scrawler():
     
     def __evaluate(self, string: str, loc: Locator, simplified_attr: bool = False) -> str:
         """Replace all variable notations in given string with values"""
-        
-        var_names: List = set(re.findall(r'(\$(var|attr)\{\s*(_?\w+)((?:\s*\|\s*\w+)*)?\s*\})', string))
 
+        placeholder_re = r'(\$(var|attr)\{\s*(_?[^|}]+(?:\s*\|\s*\w+(?:\s+[^\s{}]+)*)*\s*)\})'
+        var_names: List = set(re.findall(placeholder_re, string))
+        
         if simplified_attr and not len(var_names):
             return self.__attribute(string, loc)
 
-        for notn, typ, var_name, utils in var_names:
+        for notn, typ, var_name in var_names:
             value = notn
 
             match typ:
@@ -196,10 +246,10 @@ class Scrawler():
                     value = self.__attribute(var_name, loc)
                 case 'var':
                     value = str(self.__var(var_name, notn))
-                    
+
             string = re.sub(
                 re.escape(notn),
-                self.__apply_utils(notation.parse_utils(utils), value),
+                value,
                 string
             )
 
@@ -208,6 +258,7 @@ class Scrawler():
 
     def __apply_utils(self, utils: List[Tuple[str, List]], val: str):   
         value = val
+
         for name, args in utils:
             match name.strip():
                 case 'prepend':
@@ -222,26 +273,29 @@ class Scrawler():
     
 
     def __var(self, name: str, default: Any = None) -> Any:
+        utils, name = notation.parse_utils(name)
         if name in self.__state['vars']:
-            return self.__state['vars'][name]
+            return self.__apply_utils(utils, self.__state['vars'][name])
         
         return default
     
     
     def __attribute(self, node_attr: str | Dict, loc: Locator) -> str | None:
         values = []
+        utils = []
         locs = [loc]
 
         if type(node_attr) is str:
+            all = False
+            utils, node_attr = notation.parse_utils(node_attr)
             attr, selector = notation.parse_value(node_attr)
             node_attr = {'attribute': attr, 'selector': selector or None}
+        else:
+            all = node_attr.get('all', False)
+            attr = node_attr.get('attribute', '')
+            utils, _ = notation.parse_utils(attr)
+            selector = node_attr.get('selector', None)
 
-        all = node_attr.get('all', False)
-        selector = node_attr.get('selector', None)
-        attr = node_attr.get('attribute', '')
-        utils = notation.parse_utils(attr)
-        attr, _ = notation.parse_value(attr)
-        
         if not attr : raise ValueError(f'Attribute to extract not define at {loc}')
 
         if selector:
@@ -260,7 +314,8 @@ class Scrawler():
                 selector = selector if selector else self.__state['vars']['_node']
                 raise TimeoutError(Fore.RED + 'Node is inaccessible or not visible: ' + Fore.MAGENTA + f'{selector}' + Fore.RESET)
 
-            if len(utils): value = self.__apply_utils(value, utils)
+            if len(utils): 
+                value = self.__apply_utils(utils, value)
 
             values.append(value)
 
@@ -333,7 +388,7 @@ class Scrawler():
             if type(url) is dict:
                 links.append(url)
             elif url[0] == '$':
-                links += self.__config['links'].get(url[1:], [])
+                links += self.__state['links'].get(url[1:], [])
             else:
                 links.append({'url': url, 'metadata': {}})
 

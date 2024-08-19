@@ -27,7 +27,7 @@ def parse_action(notation: str) -> Dict[str, str|int]:
     return action
 
 
-def parse_utils(notn: str) -> List[Tuple[str, List]]:
+def parse_utils(notn: str) -> Tuple[List[Tuple[str, List]], str]:
     parts = notn.split('|')
     utils = parts[1:]
     parsed_utils = []
@@ -36,7 +36,7 @@ def parse_utils(notn: str) -> List[Tuple[str, List]]:
         util_parts = util.strip().split(' ')
         parsed_utils.append((util_parts[0], util_parts[1:]))
 
-    return parsed_utils
+    return (parsed_utils, parts[0].strip())
 
 
 def parse_value(notn: str) -> Tuple[str, str]:
