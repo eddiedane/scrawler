@@ -20,11 +20,17 @@ class Scrawler():
         self.__config = validate(config)
         self.__browser: Browser = None
         self.__browser_context: BrowserContext = None
-        self.__state = {'data': {}, 'vars': {}, 'links': {}, 'internal': {}}
+        self.__state = {'data': {}, 'vars': {}, 'links': {}}
 
 
     def go(self):
         self.__scrawl()
+
+
+    def data(self, filepath: str = None) -> Dict | None:
+        if not filepath: return self.__state['data']
+
+        return self.__output(filepath)
     
 
     @staticmethod
@@ -72,12 +78,9 @@ class Scrawler():
         print(Fore.YELLOW + 'Closing browser' + Fore.RESET)
         self.__browser_context.close()
         self.__browser.close()
-        self.__output()
 
 
-    def __output(self):
-        filepath = self.__config.get('scrawl', {}).get('output', None)
-
+    def __output(self, filepath: str):
         if not filepath: return
 
         dir = os.path.dirname(filepath)
