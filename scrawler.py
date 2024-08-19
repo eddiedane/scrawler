@@ -115,6 +115,7 @@ class Scrawler():
             all: bool = node.get('all', False)
             rng_start, rng_stop, rng_step = self.__resolve_range(node.get('range', []), len(locs))
             locs = locs[rng_start:rng_stop]
+            scroll_into_view = node.get('show', False)
 
             if not all: locs = locs[0:1]
 
@@ -124,6 +125,8 @@ class Scrawler():
             for i in range(0, len(locs), rng_step):
                 self.__state['vars']['_nth'] = i
                 loc = locs[i]
+
+                if scroll_into_view: loc.scroll_into_view_if_needed()
 
                 self.__node_actions(node.get('actions', []), loc)
 
