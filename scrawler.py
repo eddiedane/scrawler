@@ -8,11 +8,12 @@ from slugify import slugify
 from typing import Any, Dict, List, Literal, Tuple
 from utils import keypath, notation
 from utils.config import validate
-from utils.helpers import is_file_type, flatten_list, pick
+from utils.helpers import is_file_type, flatten_list, pick, is_numeric
 
 
 Config = Dict[Literal['browser', 'scrawl'], Dict]
-Action = Dict[Literal['type', 'delay', 'wait', 'screenshot', 'dispatch'], str | int | bool]
+Action = Dict[Literal['type', 'delay', 'wait', 'screenshot', 'dispatch', 'count'], str | int | bool]
+DOMRect = Dict[Literal['x', 'y', 'width', 'height', 'top', 'right', 'bottom', 'left'], float]
 
 
 class Scrawler():
@@ -30,7 +31,7 @@ class Scrawler():
     def data(self, filepath: str = None) -> Dict | None:
         if not filepath: return self.__state['data']
 
-        return self.__output(filepath)
+        self.__output(filepath)
     
 
     @staticmethod
@@ -58,6 +59,7 @@ class Scrawler():
                 page = self.__new_page(link['url'])
                 self.__state['vars'] = link.get('metadata', {})
                 self.__state['vars']['_url'] = page.url
+                self.__state['vars']['_page_index'] = len(self.__browser_context.pages) - 1
 
                 if 'repeat' in pg:
                     repeat = pg['repeat']
@@ -66,7 +68,7 @@ class Scrawler():
                         for i in range(repeat['times']):
                             self.__interact(page, repeat['nodes'])
                     elif 'while' in repeat:
-                        while not self.__should_repeat(page, repeat['while']):
+                        while self.__should_repeat(page, repeat['while']):
                             self.__interact(page, repeat['nodes'])
                 else:
                     self.__interact(page, pg['nodes'])
@@ -103,7 +105,7 @@ class Scrawler():
         loc = page.locator(opts['selector']).first
 
         if 'exists' in opts and bool(loc.count()) == opts['exists']: return True
-        
+
         if 'disabled' in opts and loc.is_disabled() == opts['disabled']: return True
 
         return False
@@ -114,7 +116,12 @@ class Scrawler():
             print(Fore.GREEN + 'Interacting with: ' + Fore.WHITE + node['selector'] + Fore.RESET)
             
             self.__state['vars']['_node'] = re.sub(':', '-', node.get('name', node['selector']))
-            locs = page.locator(node['selector']).all()
+            locator = page.locator(node['selector'])
+
+            try: locator.wait_for(timeout=node.get('timeout', 30000))
+            except: pass
+
+            locs = locator.all()
             all: bool = node.get('all', False)
             rng_start, rng_stop, rng_step = self.__resolve_range(node.get('range', []), len(locs))
             locs = locs[rng_start:rng_stop]
@@ -154,6 +161,7 @@ class Scrawler():
     def __extract_link(self, loc: Locator, opts: Dict) -> Dict:
         link = {
             'url': self.__evaluate(opts['value'], loc, simplified_attr=True),
+            'parent': self.__state['vars']['_page_index'],
             'metadata': {}
         }
 
@@ -172,7 +180,14 @@ class Scrawler():
         elif type(opts['value']) is list:
             value = [self.__evaluate(attr, loc, simplified_attr=True) for attr in opts['value']]
         elif type(opts['value']) is dict:
-            value = {key: self.__evaluate(attr, loc, simplified_attr=True) for key, attr in opts['value'].items()}
+            value = {}
+
+            for key, attr in opts['value'].items():
+                if type(attr) is str:
+                    value[key] = self.__evaluate(attr, loc, simplified_attr=True)
+                    continue
+
+                value[key] = self.__attribute(attr, loc)
 
         return value
     
@@ -208,56 +223,65 @@ class Scrawler():
             # before the node is removed or made inaccesible by action event
             screenshot_path = ''
 
-            if 'screenshot' in action:
-                screenshot_path = self.__evaluate(action['screenshot'], loc)
+            if 'screenshot' in action: screenshot_path = self.__evaluate(action['screenshot'], loc)
 
-            if 'delay' in action:
-                loc.page.wait_for_timeout(action['delay'])
+            count = action.get('count', 1)
 
-            if action.get('dispatch', False):
-                loc.dispatch_event(action['type'])
-            else:
+            if type(count) is str: count = self.__evaluate(count, loc, simplified_attr=True)
+
+            t: str = action['type']
+            rect: DOMRect = loc.evaluate("node => node.getBoundingClientRect()")
+
+            for _ in range(count):
+                if 'delay' in action: loc.page.wait_for_timeout(action['delay'])
+
                 if not loc.is_visible():
                     print(Fore.YELLOW + 'Action may fail due to node being inaccessible or not visible: ' + Fore.WHITE + f'{self.__state['vars']['_node']}@{action['type']}')
-                match action['type']:
-                    case 'click':
-                        loc.click(**pick(action.get('options', {}), {
-                            'button': True,
-                            'modifiers': True,
-                        }))
-                    case _:
-                        raise ValueError(f'The "{action['do']}" is not supported')
-                    
-            if 'wait' in action:
-                loc.page.wait_for_timeout(action['wait'])
+                
+                if action.get('dispatch', False) and t not in ['swipe_left', 'swipe_right']:
+                    loc.dispatch_event(action['type'])
+                elif t == 'click':
+                    loc.click(**pick(action.get('options', {}), {
+                        'button': True,
+                        'modifiers': True,
+                    }))
+                elif t in ['swipe_left', 'swipe_right']:
+                    if t == 'swipe_left':
+                        start_x, end_x = (rect['x'] + rect['width']/2, 0)
+                    else:
+                        start_x, end_x = (rect['x'] + rect['width']/2, rect['x'] + rect['width'])
+                        
+                    start_y = end_y = rect['y'] + rect['height']/2
+                    mouse = loc.page.mouse
 
-            if 'screenshot' in action:
-                loc.page.screenshot(path=screenshot_path, full_page=True)
+                    mouse.move(start_x, start_y)
+                    mouse.down()
+                    mouse.move(end_x, end_y)
+                    mouse.up()
+                else:
+                    raise ValueError(Fore.RED + 'The ' + Fore.CYAN + t + Fore.RED + ' action is currently not supported' + Fore.RESET)
+                        
+                if 'wait' in action: loc.page.wait_for_timeout(action['wait'])
+
+            if 'screenshot' in action: loc.page.screenshot(path=screenshot_path, full_page=True)
 
     
     def __evaluate(self, string: str, loc: Locator, simplified_attr: bool = False) -> str:
         """Replace all variable notations in given string with values"""
 
-        placeholder_re = r'(\$(var|attr)\{\s*(_?[^|}]+(?:\s*\|\s*\w+(?:\s+[^\s{}]+)*)*\s*)\})'
-        var_names: List = set(re.findall(placeholder_re, string))
-        
-        if simplified_attr and not len(var_names):
+        getters = notation.parse_getters(string)
+
+        if simplified_attr and not len(getters):
             return self.__attribute(string, loc)
 
-        for notn, typ, var_name in var_names:
+        for notn, typ, var_name in getters:
             value = notn
 
             match typ:
-                case 'attr':
-                    value = self.__attribute(var_name, loc)
-                case 'var':
-                    value = str(self.__var(var_name, notn))
+                case 'attr': value = self.__attribute(var_name, loc)
+                case 'var': value = str(self.__var(var_name, notn))
 
-            string = re.sub(
-                re.escape(notn),
-                value,
-                string
-            )
+            string = re.sub(re.escape(notn), value, string)
 
         return string
     
@@ -274,14 +298,23 @@ class Scrawler():
                     value = str(value).lower()
                 case 'slug':
                     value = slugify(str(value))
+                case 'subtract':
+                    if is_numeric(value): value = float(value)
+                    else: value = 0.0
+
+                    if len(args) > 0 and is_numeric(args[0]):
+                        value = float(value) - float(args[0])
+                case 'clear_url_params':
+                    value = value.split('?')[0]
         
         return value
     
 
     def __var(self, name: str, default: Any = None) -> Any:
-        utils, name = notation.parse_utils(name)
-        if name in self.__state['vars']:
-            return self.__apply_utils(utils, self.__state['vars'][name])
+        result = notation.parse_value(name)
+
+        if result['prop'] in self.__state['vars']:
+            return self.__apply_utils(result['parsed_utils'], self.__state['vars'][name])
         
         return default
     
@@ -290,24 +323,19 @@ class Scrawler():
         values = []
         utils = []
         locs = [loc]
+        result = notation.parse_value(node_attr)
+        attr, selector, max, ctx, utils = (result['prop'], result['selector'], result['max'] or 'one', result['ctx'], result['parsed_utils'])
 
-        if type(node_attr) is str:
-            all = False
-            utils, node_attr = notation.parse_utils(node_attr)
-            attr, selector = notation.parse_value(node_attr)
-            node_attr = {'attribute': attr, 'selector': selector or None}
-        else:
-            all = node_attr.get('all', False)
-            attr = node_attr.get('attribute', '')
-            utils, _ = notation.parse_utils(attr)
-            selector = node_attr.get('selector', None)
-
-        if not attr : raise ValueError(f'Attribute to extract not define at {loc}')
+        if not attr : raise ValueError(Fore.RED + 'Attribute to extract not define at ' + Fore.WHITE + (selector or self.__state['vars']['_node']) + Fore.RESET)
 
         if selector:
-            locs = loc.locator(selector).all()
+            match ctx:
+                case 'parent': locs = loc.locator(selector).all()
+                case 'page': locs = loc.page.locator(selector).all()
 
-        if not all: locs = locs[0:1]
+        if attr == '_count': return int(self.__apply_utils(utils, len(locs)))
+
+        if max == 'one': locs = locs[0:1]
 
         for loc in locs:
             value = None
@@ -325,7 +353,7 @@ class Scrawler():
 
             values.append(value)
 
-        if not all: return dict(enumerate(values)).get(0, '')
+        if max == 'one': return dict(enumerate(values)).get(0, '')
 
         return values
         
@@ -392,7 +420,8 @@ class Scrawler():
 
         for url in urls:
             if type(url) is dict:
-                links.append(url)
+                # exclude internally set keys e.g. parent
+                links.append(pick(url, {"url", "metadata"}))
             elif url[0] == '$':
                 links += self.__state['links'].get(url[1:], [])
             else:

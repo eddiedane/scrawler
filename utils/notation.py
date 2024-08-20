@@ -1,6 +1,10 @@
-from typing import Dict, List, Tuple
+import re
+from typing import Dict, List, Literal, Tuple
 from colorama import Fore
 from pprint import pprint
+
+
+ParseValueData = Dict[Literal['prop', 'ctx', 'selector', 'max', 'utils', 'parsed_utils'], str | List | None]
 
 
 def parse_interaction(notation: str) -> Dict[str, str|List]:
@@ -27,28 +31,38 @@ def parse_action(notation: str) -> Dict[str, str|int]:
     return action
 
 
-def parse_utils(notn: str) -> Tuple[List[Tuple[str, List]], str]:
-    parts = notn.split('|')
-    utils = parts[1:]
+def parse_value(string: str) -> ParseValueData:
+    value_re = r'(?P<prop>[^|}@]+)(?:@(?:<(?P<ctx>page|parent)(?:\.(?P<max>all|one)?)>)?(?P<selector>[^|<]+))?(?:\s*\|\s*(?P<utils>\w+(?:\s+[^\s]+)*))*\s*'
+    match = re.fullmatch(value_re, string)
+
+    if not match:
+        return {'prop': None, 'ctx': None, 'selector': None, 'utils': None, 'parsed_utils': []}
+    
+    data: ParseValueData = match.groupdict()
+    data['prop'] = (data['prop'] or '').strip()
+    data['selector'] = (data['selector'] or '').strip()
+    data['utils'] = (data['utils'] or '').strip()
+    data['ctx'] = data['ctx'] or 'parent'
+
+    if not data['utils']:
+        data['parsed_utils'] = []
+
+        return data
+    
+    util_notns = re.split(r'\s*\|\s*', data['utils'])
     parsed_utils = []
 
-    for util in utils:
-        util_parts = util.strip().split(' ')
+    for util_notn in util_notns:
+        util_parts = re.split(r'\s+', util_notn.strip())
         parsed_utils.append((util_parts[0], util_parts[1:]))
 
-    return (parsed_utils, parts[0].strip())
+    data['parsed_utils'] = parsed_utils
+
+    return data
 
 
-def parse_value(notn: str) -> Tuple[str, str]:
-    parts_1 = notn.split('|')
-    parts_2 = parts_1[0].split('@')
-    attr = parts_2[0]
-    selector = ''
-
-    if len(parts_2) > 1:
-        selector = parts_2[1]
-
-    return (attr.strip(), selector.strip())
+def parse_getters(string: str) -> List[Tuple[str, str, str]]:
+    return set(re.findall(r'(\$(var|attr)\{\s*([^|}]+(?:\s*\|\s*\w+(?:\s+[^\s{}]+)*)*\s*)\})', string))
 
 
 def find_item_key(key, match, value, vars, _):

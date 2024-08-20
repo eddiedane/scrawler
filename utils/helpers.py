@@ -1,7 +1,7 @@
 """Utility helper functions"""
 
 import re
-from typing import Dict, List, Literal, Tuple
+from typing import Any, Dict, List, Literal, Set, Tuple
 
 
 def flatten_list(l: List) -> List:
@@ -28,17 +28,31 @@ def is_file_type(typ: Literal['yaml', 'json'], filename: str) -> bool:
     return False
 
 
-def pick(obj: Dict, key_map: Dict[str, str | bool] = None) -> Dict:
+def pick(obj: Dict, key_map: Set | Dict[str, str] = {}) -> Dict:
     _obj = {}
+    
+    if type(key_map) is set:
+        _key_map = {}
+
+        for key in key_map: _key_map[key] = key
+
+        key_map = _key_map
+
+
     keys = [] if not key_map else key_map.keys()
 
     for key, value in obj.items():
-        if key_map:
-            if key not in keys or not key_map[key]: continue
+        if key not in keys: continue
         
-            key = key_map[key]
-
+        key = key_map[key]
         _obj[key] = value
 
     return _obj
         
+
+def is_numeric(val: Any) -> bool:
+    try:
+        float(val)
+        return True
+    except:
+        return False
