@@ -347,7 +347,7 @@ class Scrawler():
             value = None
             try:
                 if attr in ['href', 'src']:
-                    value = loc.get_attribute(attr)
+                    value = loc.evaluate(f'node => node.{attr}')
                 elif attr == 'text':
                     value = loc.inner_text()
             except TimeoutError as e:
