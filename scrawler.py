@@ -38,6 +38,12 @@ class Scrawler():
         if not filepath: return self.__state['data']
 
         self.__output(filepath)
+
+
+    def links(self, filepath: str | None = None) -> Dict | None:
+        if not filepath: return self.__state['links']
+
+        self.__output(filepath, state='links')
     
 
     @staticmethod
@@ -84,22 +90,22 @@ class Scrawler():
                 for p in self.__browser_context.pages[1:]: p.close()
 
 
-    def __output(self, filepath: str):
+    def __output(self, filepath: str, state: str = 'data'):
         if not filepath: return
 
         dir = os.path.dirname(filepath)
-        data = self.__state['data']
+        data = self.__state[state]
 
         if dir: os.makedirs(dir, exist_ok=True)
 
         with open(filepath, 'w') as stream:
 
             if is_file_type('yaml', filepath):
-                print(Fore.GREEN + 'Outputing data to YAML: ' + Fore.BLUE + filepath + Fore.RESET)
+                print(Fore.GREEN + f'Outputing {state} to YAML: ' + Fore.BLUE + filepath + Fore.RESET)
                 yaml.dump(data, stream)
 
             if is_file_type('json', filepath):
-                print(Fore.GREEN + 'Outputing data to JSON: ' + Fore.BLUE + filepath + Fore.RESET)
+                print(Fore.GREEN + f'Outputing {state} to JSON: ' + Fore.BLUE + filepath + Fore.RESET)
                 json.dump(data, stream, indent=2, ensure_ascii=False)
 
 
