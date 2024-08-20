@@ -156,7 +156,7 @@ class Scrawler():
 
                 if 'nodes' in node:
                     self.__interact(page, node['nodes'])
-            
+
             if 'extract' in node:
                 self.__save_extract(
                     node['extract'],
@@ -368,18 +368,19 @@ class Scrawler():
 
     def __launch_browser(self):
         playwright = sync_playwright().start()
-        browser_type: str = self.__config['browser']['type'] or 'chromium'
+        browser_config = self.__config.get('browser', {})
+        browser_type: str = browser_config.get('type', 'chromium')
 
         if not hasattr(playwright, browser_type):
             raise ValueError(Fore.RED + 'Unsupported or invalid browser type, ' + Fore.CYAN + browser_type + Fore.RESET)
         
         kwargs = {}
 
-        if keypath.get('browser.show', self.__config):
-            kwargs['headless'] = not self.__config['browser']['show']
+        if 'show' in browser_config:
+            kwargs['headless'] = not browser_config['show']
         
-        if 'slowdown' in self.__config['browser']:
-            kwargs['slow_mo'] = self.__config['browser']['slowdown']
+        if 'slowdown' in browser_config:
+            kwargs['slow_mo'] = browser_config['slowdown']
 
         self.__browser = getattr(playwright, browser_type).launch(**kwargs)
         self.__browser_context = self.__browser.new_context()
@@ -395,8 +396,9 @@ class Scrawler():
 
     def __new_page(self, url: str) -> Page:
         page = self.__browser_context.new_page()
-        viewport: List = keypath.get('browser.viewport', self.__config, [])
-        blacklisted_resources: List = keypath.get('browser.block', self.__config, [])
+        browser_config = self.__config.get('browser', {})
+        viewport: List = browser_config.get('viewport', [])
+        blacklisted_resources: List = browser_config.get('block', [])
 
         if len(viewport) == 2:
             page.set_viewport_size({
@@ -412,11 +414,11 @@ class Scrawler():
 
         kwargs = {}
 
-        if 'ready_on' in self.__config['browser']:
-            kwargs['wait_until'] = self.__config['browser']['ready_on']
+        if 'ready_on' in browser_config:
+            kwargs['wait_until'] = browser_config['ready_on']
 
-        if 'timeout' in self.__config['browser']:
-            kwargs['timeout'] = self.__config['browser']['timeout']
+        if 'timeout' in browser_config:
+            kwargs['timeout'] = browser_config['timeout']
         
         page.goto(url, **kwargs)
 
