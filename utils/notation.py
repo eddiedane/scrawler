@@ -1,34 +1,9 @@
 import re
 from typing import Dict, List, Literal, Tuple
 from colorama import Fore
-from pprint import pprint
 
 
 ParseValueData = Dict[Literal['prop', 'ctx', 'selector', 'max', 'utils', 'parsed_utils'], str | List | None]
-
-
-def parse_interaction(notation: str) -> Dict[str, str|List]:
-    interaction = {}
-    vals = notation.split('@')
-    interaction['node'] = vals[0]
-
-    if interaction['node'][0] == '?':
-        interaction['optional'] = True
-        interaction['node'] = interaction['node'][1:]
-
-    interaction['actions'] = [parse_action(act_notation) for act_notation in vals[1:]]
-    
-    return interaction
-
-
-def parse_action(notation: str) -> Dict[str, str|int]:
-    vals = notation.split('|')
-    action = {'do': vals[0]}
-
-    if len(vals) == 2:
-        action['wait'] = int(vals[1])
-
-    return action
 
 
 def parse_value(string: str) -> ParseValueData:

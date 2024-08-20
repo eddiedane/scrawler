@@ -8,7 +8,7 @@ from slugify import slugify
 from typing import Any, Dict, List, Literal, Tuple
 from utils import keypath, notation
 from utils.config import validate
-from utils.helpers import is_file_type, flatten_list, pick, is_numeric
+from utils.helpers import is_file_type, pick, is_numeric
 
 
 Config = Dict[Literal['browser', 'scrawl'], Dict]
@@ -71,7 +71,6 @@ class Scrawler():
                 page = self.__new_page(link['url'])
                 self.__state['vars'] = link.get('metadata', {})
                 self.__state['vars']['_url'] = page.url
-                self.__state['vars']['_page_index'] = len(self.__browser_context.pages) - 1
 
                 if 'repeat' in pg:
                     repeat = pg['repeat']
@@ -169,7 +168,6 @@ class Scrawler():
     def __extract_link(self, loc: Locator, opts: Dict) -> Dict:
         link = {
             'url': self.__evaluate(opts['value'], loc, simplified_attr=True),
-            'parent': self.__state['vars']['_page_index'],
             'metadata': {}
         }
 

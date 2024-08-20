@@ -1,20 +1,7 @@
 """Utility helper functions"""
 
 import re
-from typing import Any, Dict, List, Literal, Set, Tuple
-
-
-def flatten_list(l: List) -> List:
-    items = []
-
-    for item in l:
-        if type(item) is list:
-            rst = flatten_list(item)
-            items = items + rst
-        else:
-            items.append(item)
-
-    return items
+from typing import Any, Dict, Literal, Set
 
 
 def is_file_type(typ: Literal['yaml', 'json'], filename: str) -> bool:
