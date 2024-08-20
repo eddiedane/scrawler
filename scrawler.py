@@ -25,10 +25,16 @@ class Scrawler():
 
 
     def go(self):
-        self.__scrawl()
+        try:
+            self.__scrawl()
+            self.__close_browser()
+        except Exception as e:
+            self.__close_browser()
+
+            raise e
 
 
-    def data(self, filepath: str = None) -> Dict | None:
+    def data(self, filepath: str | None = None) -> Dict | None:
         if not filepath: return self.__state['data']
 
         self.__output(filepath)
@@ -75,11 +81,7 @@ class Scrawler():
 
                 print(Fore.YELLOW + 'Closing page: ' + Fore.BLUE + link['url'] + Fore.RESET)
 
-                page.close()
-
-        print(Fore.YELLOW + 'Closing browser' + Fore.RESET)
-        self.__browser_context.close()
-        self.__browser.close()
+                for p in self.__browser_context.pages[1:]: p.close()
 
 
     def __output(self, filepath: str):
@@ -375,6 +377,14 @@ class Scrawler():
 
         self.__browser = getattr(playwright, browser_type).launch(**kwargs)
         self.__browser_context = self.__browser.new_context()
+
+
+    def __close_browser(self):
+        print(Fore.YELLOW + 'Closing browser' + Fore.RESET)
+
+        self.__browser_context.pages[0].close()
+        self.__browser_context.close()
+        self.__browser.close()
 
 
     def __new_page(self, url: str) -> Page:
