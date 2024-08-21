@@ -208,7 +208,6 @@ class Scrawler():
                 config['scope'],
                 self.__state['data'],
                 self.__state['vars'],
-                special_key=r'\*\{(\w+)(=|!=|>=|<=|>|<)(\$)?(\w+)\}',
                 resolve_key=notation.find_item_key
             )
 

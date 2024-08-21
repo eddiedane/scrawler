@@ -1,6 +1,6 @@
 """Utility helper functions"""
 
-import re
+import re, inspect
 from typing import Any, Dict, Literal, Set
 
 
@@ -43,3 +43,16 @@ def is_numeric(val: Any) -> bool:
         return True
     except:
         return False
+    
+
+def count_required_args(func):
+    # Get the signature of the function
+    sig = inspect.signature(func)
+    # Count the number of required arguments
+    required_args = sum(
+        1 for param in sig.parameters.values()
+        if param.default == inspect.Parameter.empty and
+           param.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.KEYWORD_ONLY)
+    )
+    
+    return required_args

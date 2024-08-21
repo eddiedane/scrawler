@@ -1,4 +1,5 @@
 import re
+from utils.helpers import count_required_args
 from typing import Any, Callable, Dict, List
 
 def split(path: str, delimiter: str = '.') -> List[str]:
@@ -64,7 +65,6 @@ def resolve(
     obj: List | Dict,
     vars: Dict = {},
     delimiter: str = '.',
-    special_key: str = None,
     resolve_key: Callable = lambda k:k,
     strict: bool = False
 ) -> List:
@@ -77,12 +77,12 @@ def resolve(
     value = obj
 
     for i in range(len(path)):
-        key = path[i]
+        args_count = count_required_args(resolve_key)
+        args = [path[i], value, vars, obj]
 
-        if special_key and resolve_key:
-            match = re.search(special_key, key)
+        if args_count > 4: args += [obj] * (args_count - 4)
 
-            if match: key = resolve_key(key, match, value, vars, obj)
+        key = resolve_key(*args[0:args_count])
             
         if not ((type(value) is list or type(value) is dict) and has_key(value, key)):
             if strict: raise KeyError(f'Unable to resolve key "{key}"')

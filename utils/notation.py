@@ -4,7 +4,7 @@ from colorama import Fore
 
 
 ParseValueData = Dict[Literal['prop', 'ctx', 'selector', 'max', 'utils', 'parsed_utils'], str | List | None]
-
+KeyMatchData = Dict[Literal['is_left_var', 'left_operand', 'operator', 'is_right_var', 'right_operand'], str]
 
 def parse_value(string: str) -> ParseValueData:
     value_re = r'(?P<prop>[^|}@]+)(?:@(?:<(?P<ctx>page|parent)(?:\.(?P<max>all|one)?)>)?(?P<selector>[^|<]+))?(?:\s*\|\s*(?P<utils>\w+(?:\s+[^\s]+)*))*\s*'
@@ -40,32 +40,34 @@ def parse_getters(string: str) -> List[Tuple[str, str, str]]:
     return set(re.findall(r'(\$(var|attr)\{\s*([^|}]+(?:\s*\|\s*\w+(?:\s+[^\s{}]+)*)*\s*)\})', string))
 
 
-def find_item_key(key, match, value, vars, _):
-    sub_key = match.group(1)
-    operator = match.group(2)
-    var_sign = match.group(3)
-    operand = match.group(4)
+def find_item_key(key, value, vars):
+    key_re = r'\$key\{\s*(?P<is_left_var>\$)?(?P<left_operand>\w+)\s*(?P<operator>=|!=|>=|<=|>|<)\s*(?P<is_right_var>\$)?(?P<right_operand>\w+)\s*\}'
+    match = re.search(key_re, key)
 
-    if var_sign:
-        operand = vars[operand]
+    if not match: return key
+
+    match_data: KeyMatchData = match.groupdict()
+    operator = match_data['operator']
+    left_operand = vars[match_data['left_operand']] if match_data['is_left_var'] else match_data['left_operand']
+    right_operand = vars[match_data['right_operand']] if match_data['is_right_var'] else match_data['right_operand']
 
     if type(value) is dict: items = value.items()
     elif type(value) is list: items = enumerate(value)
-    else: raise TypeError(f'Invalid operation type at "{key}"')
+    else: raise TypeError(Fore.RED + f'Invalid operation type (dict and list only) at ' + Fore.CYAN + key + Fore.RESET)
 
     for k, v in items:
         found = False
 
         match operator:
-            case '=': found = v[sub_key] == operand
-            case '!=': found = v[sub_key] != operand
-            case '>=': found = v[sub_key] >= operand
-            case '<=': found = v[sub_key] <= operand
-            case '>': found = v[sub_key] > operand
-            case '<': found = v[sub_key] < operand
-            case _: raise ValueError(f'Invalid operator "{operator}"')
+            case '=': found = v[left_operand] == right_operand
+            case '!=': found = v[left_operand] != right_operand
+            case '>=': found = v[left_operand] >= right_operand
+            case '<=': found = v[left_operand] <= right_operand
+            case '>': found = v[left_operand] > right_operand
+            case '<': found = v[left_operand] < right_operand
+            case _: raise ValueError(Fore.RED + 'Invalid operator ' + Fore.CYAN + operator + Fore.RED + ' at ' + Fore.CYAN + key + Fore.RESET)
         
         if found: return k
     else:
-        raise ValueError(Fore.RED + 'No match found at ' + Fore.CYAN + f'"{key}"' + Fore.RED + ' when operand is ' + Fore.BLUE + f'"{operand}"' + Fore.RESET)
+        raise ValueError(Fore.RED + 'No match found at ' + Fore.CYAN + key + Fore.RED + ' with comparsion of ' + Fore.BLUE + f'{left_operand}{operator}{right_operand}' + Fore.RESET)
     
