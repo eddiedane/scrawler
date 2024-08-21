@@ -12,6 +12,7 @@ from utils.helpers import is_file_type, pick, is_numeric
 
 
 Config = Dict[Literal['browser', 'scrawl'], Dict]
+Node = Dict[Literal['selector', 'all', 'range', 'links', 'data', 'nodes', 'actions'], str | bool | List | Dict]
 Action = Dict[Literal['type', 'delay', 'wait', 'screenshot', 'dispatch', 'count'], str | int | bool]
 DOMRect = Dict[Literal['x', 'y', 'width', 'height', 'top', 'right', 'bottom', 'left'], float]
 
@@ -148,11 +149,11 @@ class Scrawler():
 
                 self.__node_actions(node.get('actions', []), loc)
 
-                if 'extract' in node and 'links' in node['extract']:
-                    extracted_links.append(self.__extract_link(loc, node['extract']['links']))
+                if 'links' in node:
+                    extracted_links.append(self.__extract_link(loc, node['links']))
 
-                if 'extract' in node and 'data' in node['extract']:
-                    extracted_data.append(self.__extract_data(loc, node['extract']['data']))
+                if 'data' in node:
+                    extracted_data.append(self.__extract_data(loc, node['data']))
 
                 if 'nodes' in node:
                     self.__interact(page, node['nodes'])
@@ -168,7 +169,7 @@ class Scrawler():
     
     def __extract_link(self, loc: Locator, opts: Dict) -> Dict:
         link = {
-            'url': self.__evaluate(opts['value'], loc, simplified_attr=True),
+            'url': self.__evaluate(opts['url'], loc, simplified_attr=True),
             'metadata': {}
         }
 
@@ -199,19 +200,19 @@ class Scrawler():
         return value
     
 
-    def __save_extract(self, ext: Dict, links: List, data_values: List, all: bool = True) -> None:
-        if 'links' in ext:
+    def __save_extract(self, node: Node, links: List, data_values: List, all: bool = True) -> None:
+        if 'links' in node:
             print(Fore.GREEN + 'Extracting links' + Fore.RESET)
-            if keypath.has_key(self.__state['links'], ext['links']['name']):
-                self.__state['links'][ext['links']['name']] = self.__state['links'][ext['links']['name']] + links
+            if keypath.has_key(self.__state['links'], node['links']['name']):
+                self.__state['links'][node['links']['name']] = self.__state['links'][node['links']['name']] + links
             else:
-                self.__state['links'][ext['links']['name']] = links
+                self.__state['links'][node['links']['name']] = links
     
-        if 'data' in ext:
+        if 'data' in node:
             print(Fore.GREEN + 'Extracting data' + Fore.RESET)
             data = self.__state['data']
             path = keypath.resolve(
-                ext['data']['name'],
+                node['data']['scope'],
                 data,
                 self.__state['vars'],
                 special_key=r'\*\{(\w+)(=|!=|>=|<=|>|<)(\$)?(\w+)\}',
