@@ -12,8 +12,12 @@ from utils.helpers import is_file_type, pick, is_numeric
 
 
 Config = Dict[Literal['browser', 'scrawl'], Dict]
-Node = Dict[Literal['selector', 'all', 'range', 'links', 'data', 'nodes', 'actions'], str | bool | List | Dict]
-Action = Dict[Literal['type', 'delay', 'wait', 'screenshot', 'dispatch', 'count'], str | int | bool]
+NodeConfig = Dict[Literal['selector', 'all', 'range', 'links', 'data', 'nodes', 'actions'], str | bool | List | Dict]
+LinkConfig = Dict[Literal['name', 'url', 'metadata'], str | Dict[str, Any]]
+DataConfig = Dict[Literal['scope', 'value'], str | List[str] | Dict[str, Any]]
+ActionConfig = Dict[Literal['type', 'delay', 'wait', 'screenshot', 'dispatch', 'count'], str | int | bool]
+Link = Dict[Literal['url', 'metadata'], str | Dict[str, Any]]
+Links = Dict[str, List[Link]]
 DOMRect = Dict[Literal['x', 'y', 'width', 'height', 'top', 'right', 'bottom', 'left'], float]
 
 
@@ -138,9 +142,6 @@ class Scrawler():
 
             if not all: locs = locs[0:1]
 
-            extracted_links = []
-            extracted_data = []
-
             for i in range(0, len(locs), rng_step):
                 self.__state['vars']['_nth'] = i
                 loc = locs[i]
@@ -149,81 +150,72 @@ class Scrawler():
 
                 self.__node_actions(node.get('actions', []), loc)
 
-                if 'links' in node:
-                    extracted_links.append(self.__extract_link(loc, node['links']))
+                if 'links' in node: self.__add_links(loc, node['links'])
 
-                if 'data' in node:
-                    extracted_data.append(self.__extract_data(loc, node['data']))
+                if 'data' in node: self.__extract_data(loc, node['data'], all)
 
-                if 'nodes' in node:
-                    self.__interact(page, node['nodes'])
-
-            if 'extract' in node:
-                self.__save_extract(
-                    node['extract'],
-                    extracted_links,
-                    extracted_data,
-                    node.get('all', False)
-                )
+                if 'nodes' in node: self.__interact(page, node['nodes'])
 
     
-    def __extract_link(self, loc: Locator, opts: Dict) -> Dict:
-        link = {
-            'url': self.__evaluate(opts['url'], loc, simplified_attr=True),
-            'metadata': {}
-        }
+    def __add_links(self, loc: Locator, links: List[LinkConfig]) -> None:
+        """Add links to state links"""
 
-        if 'metadata' in opts:
-            for key, val_notn in opts['metadata'].items():
-                link['metadata'][key] = self.__evaluate(val_notn, loc, simplified_attr=True)
-                
-        return link
+        for link in links:
+            name = link['name']
+            metadata: Dict = {}
+            result = self.__evaluate(link['url'], loc, simplified_attr=True)
+
+            if name not in self.__state['links']:
+                self.__state['links'][name] = []
+
+            if 'metadata' in link:
+                for key, value in link['metadata'].items():
+                    metadata[key] = self.__evaluate(value, loc, simplified_attr=True)
+
+            if type(result) is not list:
+                self.__state['links'][name].append({'url': result, 'metadata': metadata})
+                continue
+            
+            for string in result:
+                self.__state['links'][name].append({'url': string, 'metadata': metadata})
 
 
-    def __extract_data(self, loc: Locator, opts: Dict) -> str | List | Dict:
-        value = None
+    def __extract_data(self, loc: Locator, configs: List[DataConfig], all: bool = False) -> None:
+        for config in configs:
+            value = None
 
-        if type(opts['value']) is str:
-            value = self.__evaluate(opts['value'], loc, simplified_attr=True)
-        elif type(opts['value']) is list:
-            value = [self.__evaluate(attr, loc, simplified_attr=True) for attr in opts['value']]
-        elif type(opts['value']) is dict:
-            value = {}
+            if type(config['value']) is str:
+                value = self.__evaluate(config['value'], loc, simplified_attr=True)
+            elif type(config['value']) is list:
+                value = [self.__evaluate(attr, loc, simplified_attr=True) for attr in config['value']]
+            elif type(config['value']) is dict:
+                value = {}
 
-            for key, attr in opts['value'].items():
-                if type(attr) is str:
-                    value[key] = self.__evaluate(attr, loc, simplified_attr=True)
-                    continue
+                for key, attr in config['value'].items():
+                    if type(attr) is str:
+                        value[key] = self.__evaluate(attr, loc, simplified_attr=True)
+                        continue
 
-                value[key] = self.__attribute(attr, loc)
+                    value[key] = self.__attribute(attr, loc)
 
-        return value
-    
-
-    def __save_extract(self, node: Node, links: List, data_values: List, all: bool = True) -> None:
-        if 'links' in node:
-            print(Fore.GREEN + 'Extracting links' + Fore.RESET)
-            if keypath.has_key(self.__state['links'], node['links']['name']):
-                self.__state['links'][node['links']['name']] = self.__state['links'][node['links']['name']] + links
-            else:
-                self.__state['links'][node['links']['name']] = links
-    
-        if 'data' in node:
             print(Fore.GREEN + 'Extracting data' + Fore.RESET)
-            data = self.__state['data']
-            path = keypath.resolve(
-                node['data']['scope'],
-                data,
+
+            value = [value] if all else value
+
+            if type(value) is list and value[0] is None: value = []
+
+            scope = keypath.resolve(
+                config['scope'],
+                self.__state['data'],
                 self.__state['vars'],
                 special_key=r'\*\{(\w+)(=|!=|>=|<=|>|<)(\$)?(\w+)\}',
                 resolve_key=notation.find_item_key
             )
-            value = data_values if all else data_values[0]
 
-            keypath.assign(value, data, path, merge=True)
+            keypath.assign(value, self.__state['data'], scope, merge=True)
 
     
-    def __node_actions(self, actions: List[Action], loc: Locator):
+    def __node_actions(self, actions: List[ActionConfig], loc: Locator):
         """Perform listed actions on the selected node"""
         
         for action in actions:
@@ -274,7 +266,7 @@ class Scrawler():
             if 'screenshot' in action: loc.page.screenshot(path=screenshot_path, full_page=True)
 
     
-    def __evaluate(self, string: str, loc: Locator, simplified_attr: bool = False) -> str:
+    def __evaluate(self, string: str, loc: Locator, simplified_attr: bool = False) -> str | List[str]:
         """Replace all variable notations in given string with values"""
 
         getters = notation.parse_getters(string)
