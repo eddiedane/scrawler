@@ -12,7 +12,7 @@ from utils.helpers import is_file_type, pick, is_numeric, is_none_keys
 
 
 Config = Dict[Literal['browser', 'scrawl'], Dict]
-NodeConfig = Dict[Literal['selector', 'all', 'range', 'links', 'data', 'nodes', 'actions'], str | bool | List | Dict]
+NodeConfig = Dict[Literal['selector', 'all', 'range', 'links', 'data', 'nodes', 'actions', 'wait'], int | str | bool | List | Dict]
 LinkConfig = Dict[Literal['name', 'url', 'metadata'], str | Dict[str, Any]]
 DataConfig = Dict[Literal['scope', 'value'], str | List[str] | Dict[str, Any]]
 ActionConfig = Dict[Literal['type', 'delay', 'wait', 'screenshot', 'dispatch', 'count'], str | int | bool]
@@ -124,17 +124,16 @@ class Scrawler():
         return False
 
     
-    def __interact(self, page: Page, nodes: List[Dict]):
+    def __interact(self, page: Page, nodes: List[NodeConfig]):
         for node in nodes:
             print(Fore.GREEN + 'Interacting with: ' + Fore.WHITE + node['selector'] + Fore.RESET)
             
             self.__state['vars']['_node'] = re.sub(':', '-', node.get('name', node['selector']))
             locator = page.locator(node['selector'])
 
-            try: 
-                locator.wait_for(timeout=node.get('timeout', 30000))
-            except:
-                pass
+            if 'wait' in node:
+                try: locator.wait_for(timeout=node['wait'])
+                except TimeoutError as e: raise e
 
             locs = locator.all()
             all: bool = node.get('all', False)
