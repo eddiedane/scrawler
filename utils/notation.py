@@ -3,11 +3,12 @@ from typing import Dict, List, Literal, Tuple
 from colorama import Fore
 
 
-ParseValueData = Dict[Literal['prop', 'ctx', 'selector', 'max', 'utils', 'parsed_utils'], str | List | None]
+ParseValueData = Dict[Literal['prop', 'child_node', 'ctx', 'selector', 'max', 'utils', 'parsed_utils', 'var'], int | str | List | None]
 KeyMatchData = Dict[Literal['is_left_var', 'left_operand', 'operator', 'is_right_var', 'right_operand'], str]
 
+
 def parse_value(string: str) -> ParseValueData:
-    value_re = r'(?P<prop>[^|}@]+)(?:@(?:<(?P<ctx>page|parent)(?:\.(?P<max>all|one)?)>)?(?P<selector>[^|<]+))?(?:\s*\|\s*(?P<utils>\w+(?:\s+[^\s]+)*))*\s*'
+    value_re = r'(?:(?P<prop>\w+)(?::child\((?P<child_node>\d+)\))?)\s*(?:@\s*(?:<(?P<ctx>page|parent)(?:\.(?P<max>all|first)?)>)?(?P<selector>[^|<]+))?(?:\s*\|\s*(?P<utils>\w+(?:\s+[^>]+)*))*\s*(?:>>\s*(?P<var>\w+))?'
     match = re.fullmatch(value_re, string)
 
     if not match:
@@ -15,20 +16,22 @@ def parse_value(string: str) -> ParseValueData:
     
     data: ParseValueData = match.groupdict()
     data['prop'] = (data['prop'] or '').strip()
+    data['child_node'] = int(data['child_node']) if data['child_node'] else None
     data['selector'] = (data['selector'] or '').strip()
     data['utils'] = (data['utils'] or '').strip()
     data['ctx'] = data['ctx'] or 'parent'
+    data['max'] = data['max'] or 'one'
 
     if not data['utils']:
         data['parsed_utils'] = []
 
         return data
     
-    util_notns = re.split(r'\s*\|\s*', data['utils'])
+    utils = re.split(r'\s*\|\s*', data['utils'])
     parsed_utils = []
 
-    for util_notn in util_notns:
-        util_parts = re.split(r'\s+', util_notn.strip())
+    for util in utils:
+        util_parts = re.split(r'\s+', util.strip())
         parsed_utils.append((util_parts[0], util_parts[1:]))
 
     data['parsed_utils'] = parsed_utils

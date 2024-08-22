@@ -56,3 +56,10 @@ def count_required_args(func):
     )
     
     return required_args
+
+
+def is_none_keys(obj: Dict, *keys) -> bool:
+    for key in keys:
+        if key in obj and obj[key] is not None: return False
+    
+    return True

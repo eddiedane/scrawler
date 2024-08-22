@@ -8,7 +8,7 @@ from slugify import slugify
 from typing import Any, Dict, List, Literal, Tuple
 from utils import keypath, notation
 from utils.config import validate
-from utils.helpers import is_file_type, pick, is_numeric
+from utils.helpers import is_file_type, pick, is_numeric, is_none_keys
 
 
 Config = Dict[Literal['browser', 'scrawl'], Dict]
@@ -106,11 +106,11 @@ class Scrawler():
         with open(filepath, 'w') as stream:
 
             if is_file_type('yaml', filepath):
-                print(Fore.GREEN + f'Outputing {state} to YAML: ' + Fore.BLUE + filepath + Fore.RESET)
+                print(Fore.GREEN + f'Outputting {state} to YAML: ' + Fore.BLUE + filepath + Fore.RESET)
                 yaml.dump(data, stream)
 
             if is_file_type('json', filepath):
-                print(Fore.GREEN + f'Outputing {state} to JSON: ' + Fore.BLUE + filepath + Fore.RESET)
+                print(Fore.GREEN + f'Outputting {state} to JSON: ' + Fore.BLUE + filepath + Fore.RESET)
                 json.dump(data, stream, indent=2, ensure_ascii=False)
 
 
@@ -131,8 +131,10 @@ class Scrawler():
             self.__state['vars']['_node'] = re.sub(':', '-', node.get('name', node['selector']))
             locator = page.locator(node['selector'])
 
-            try: locator.wait_for(timeout=node.get('timeout', 30000))
-            except: pass
+            try: 
+                locator.wait_for(timeout=node.get('timeout', 30000))
+            except:
+                pass
 
             locs = locator.all()
             all: bool = node.get('all', False)
@@ -219,7 +221,7 @@ class Scrawler():
         
         for action in actions:
             # pre-evaluate and cache screenshot file path,
-            # before the node is removed or made inaccesible by action event
+            # before the node is removed or made inaccessible by action event
             screenshot_path = ''
 
             if 'screenshot' in action: screenshot_path = self.__evaluate(action['screenshot'], loc)
@@ -273,14 +275,14 @@ class Scrawler():
         if simplified_attr and not len(getters):
             return self.__attribute(string, loc)
 
-        for notn, typ, var_name in getters:
-            value = notn
+        for full_match, typ, var_name in getters:
+            value = full_match
 
             match typ:
                 case 'attr': value = self.__attribute(var_name, loc)
-                case 'var': value = str(self.__var(var_name, notn))
+                case 'var': value = str(self.__var(var_name, full_match))
 
-            string = re.sub(re.escape(notn), value, string)
+            string = re.sub(re.escape(full_match), value, string)
 
         return string
     
@@ -305,6 +307,8 @@ class Scrawler():
                         value = float(value) - float(args[0])
                 case 'clear_url_params':
                     value = value.split('?')[0]
+                case 'trim':
+                    value = value.strip()
         
         return value
     
@@ -312,18 +316,27 @@ class Scrawler():
     def __var(self, name: str, default: Any = None) -> Any:
         result = notation.parse_value(name)
 
+        if not is_none_keys(result, 'child_node', 'ctx', 'max', 'selector'):
+            raise ValueError(Fore.RED + 'Invalid $var{...} notation at ' + Fore.CYAN + name + Fore.RESET)
+
         if result['prop'] in self.__state['vars']:
             return self.__apply_utils(result['parsed_utils'], self.__state['vars'][name])
         
         return default
     
     
-    def __attribute(self, node_attr: str | Dict, loc: Locator) -> str | None:
+    def __attribute(self, node_attr: str | Dict, loc: Locator) -> str | List:
         values = []
         utils = []
         locs = [loc]
         result = notation.parse_value(node_attr)
-        attr, selector, max, ctx, utils = (result['prop'], result['selector'], result['max'] or 'one', result['ctx'], result['parsed_utils'])
+        attr = result['prop']
+        child_node = result['child_node']
+        selector = result['selector']
+        max = result['max']
+        ctx = result['ctx']
+        utils = result['parsed_utils']
+        var_name = result['var']
 
         if not attr : raise ValueError(Fore.RED + 'Attribute to extract not define at ' + Fore.WHITE + (selector or self.__state['vars']['_node']) + Fore.RESET)
 
@@ -338,21 +351,20 @@ class Scrawler():
 
         for loc in locs:
             value = None
-            try:
-                if attr in ['href', 'src']:
-                    value = loc.evaluate(f'node => node.{attr}')
-                elif attr == 'text':
-                    value = loc.inner_text()
-            except TimeoutError as e:
-                selector = selector if selector else self.__state['vars']['_node']
-                raise TimeoutError(Fore.RED + 'Node is inaccessible or not visible: ' + Fore.MAGENTA + f'{selector}' + Fore.RESET)
+
+            if attr in ['href', 'src', 'text']:
+                if attr == 'text': attr = 'textContent'
+
+                value = loc.evaluate(f'(node, [childNode, attr]) => childNode ? node.childNodes[childNode - 1][attr] : node[attr]', [child_node, attr])
 
             if len(utils): 
                 value = self.__apply_utils(utils, value)
 
             values.append(value)
 
-        if max == 'one': return dict(enumerate(values)).get(0, '')
+        if max == 'one': values: str = dict(enumerate(values)).get(0, '')
+
+        if var_name: self.__state['vars'][var_name] = values
 
         return values
         
