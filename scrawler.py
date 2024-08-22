@@ -341,7 +341,7 @@ class Scrawler():
                 case 'parent': locs = loc.locator(selector).all()
                 case 'page': locs = loc.page.locator(selector).all()
 
-        if attr == '_count': return int(self.__apply_utils(utils, len(locs)))
+        if attr == 'count': return int(self.__apply_utils(utils, len(locs)))
 
         if max == 'one': locs = locs[0:1]
 
