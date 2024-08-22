@@ -164,14 +164,14 @@ class Scrawler():
         for link in links:
             name = link['name']
             metadata: Dict = {}
-            result = self.__evaluate(link['url'], loc, simplified_attr=True)
+            result = self.__evaluate(link['url'], loc)
 
             if name not in self.__state['links']:
                 self.__state['links'][name] = []
 
             if 'metadata' in link:
                 for key, value in link['metadata'].items():
-                    metadata[key] = self.__evaluate(value, loc, simplified_attr=True)
+                    metadata[key] = self.__evaluate(value, loc)
 
             if type(result) is not list:
                 self.__state['links'][name].append({'url': result, 'metadata': metadata})
@@ -186,15 +186,15 @@ class Scrawler():
             value = None
 
             if type(config['value']) is str:
-                value = self.__evaluate(config['value'], loc, simplified_attr=True)
+                value = self.__evaluate(config['value'], loc)
             elif type(config['value']) is list:
-                value = [self.__evaluate(attr, loc, simplified_attr=True) for attr in config['value']]
+                value = [self.__evaluate(attr, loc) for attr in config['value']]
             elif type(config['value']) is dict:
                 value = {}
 
                 for key, attr in config['value'].items():
                     if type(attr) is str:
-                        value[key] = self.__evaluate(attr, loc, simplified_attr=True)
+                        value[key] = self.__evaluate(attr, loc)
                         continue
 
                     value[key] = self.__attribute(attr, loc)
@@ -227,7 +227,7 @@ class Scrawler():
 
             count = action.get('count', 1)
 
-            if type(count) is str: count = self.__evaluate(count, loc, simplified_attr=True)
+            if type(count) is str: count = self.__evaluate(count, loc)
 
             t: str = action['type']
             rect: DOMRect = loc.evaluate("node => node.getBoundingClientRect()")
@@ -266,13 +266,10 @@ class Scrawler():
             if 'screenshot' in action: loc.page.screenshot(path=screenshot_path, full_page=True)
 
     
-    def __evaluate(self, string: str, loc: Locator, simplified_attr: bool = False) -> str | List[str]:
+    def __evaluate(self, string: str, loc: Locator) -> str | List[str]:
         """Replace all variable notations in given string with values"""
 
         getters = notation.parse_getters(string)
-
-        if simplified_attr and not len(getters):
-            return self.__attribute(string, loc)
 
         for full_match, typ, var_name in getters:
             value = full_match
