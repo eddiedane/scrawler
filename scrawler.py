@@ -125,43 +125,53 @@ class Scrawler():
 
     
     def __interact(self, page: Page, nodes: List[NodeConfig]):
-        for node in nodes:
-            print(Fore.GREEN + 'Interacting with: ' + Fore.WHITE + node['selector'] + Fore.RESET)
-            
-            self.__state['vars']['_node'] = re.sub(':', '-', node.get('name', node['selector']))
-            loc_kwargs = {}
+        for alts in nodes:
+            alts = alts if type(alts) == list else [alts]
 
-            if 'contains' in node: loc_kwargs['has_text'] = node['contains']
+            for node in alts:
 
-            if 'excludes' in node: loc_kwargs['has_not_text'] = node['excludes']
+                self.__state['vars']['_node'] = re.sub(':', '-', node.get('name', node['selector']))
+                loc_kwargs = {}
 
-            locator = page.locator(node['selector'], **loc_kwargs)
+                if 'contains' in node: loc_kwargs['has_text'] = node['contains']
 
-            if 'wait' in node:
-                try: locator.wait_for(timeout=node['wait'])
-                except TimeoutError as e: raise e
+                if 'excludes' in node: loc_kwargs['has_not_text'] = node['excludes']
 
-            locs = locator.all()
-            all: bool = node.get('all', False)
-            rng_start, rng_stop, rng_step = self.__resolve_range(node.get('range', []), len(locs))
-            locs = locs[rng_start:rng_stop]
-            scroll_into_view = node.get('show', False)
+                locator = page.locator(node['selector'], **loc_kwargs)
 
-            if not all: locs = locs[0:1]
+                print(Fore.GREEN + 'Interacting with: ' + Fore.WHITE + node['selector'] + Fore.RESET)
 
-            for i in range(0, len(locs), rng_step):
-                self.__state['vars']['_nth'] = i
-                loc = locs[i]
+                if 'wait' in node:
+                    try: locator.wait_for(timeout=node['wait'])
+                    except TimeoutError as e: raise e
 
-                if scroll_into_view: loc.scroll_into_view_if_needed()
+                locs = locator.all()
+                count = len(locs)
 
-                self.__node_actions(node.get('actions', []), loc)
+                if not count: continue
 
-                if 'links' in node: self.__add_links(loc, node['links'])
+                all: bool = node.get('all', False)
+                rng_start, rng_stop, rng_step = self.__resolve_range(node.get('range', []), len(locs))
+                locs = locs[rng_start:rng_stop]
+                scroll_into_view = node.get('show', False)
 
-                if 'data' in node: self.__extract_data(loc, node['data'], all)
+                if not all: locs = locs[0:1]
 
-                if 'nodes' in node: self.__interact(page, node['nodes'])
+                for i in range(0, len(locs), rng_step):
+                    self.__state['vars']['_nth'] = i
+                    loc = locs[i]
+
+                    if scroll_into_view: loc.scroll_into_view_if_needed()
+
+                    self.__node_actions(node.get('actions', []), loc)
+
+                    if 'links' in node: self.__add_links(loc, node['links'])
+
+                    if 'data' in node: self.__extract_data(loc, node['data'], all)
+
+                    if 'nodes' in node: self.__interact(page, node['nodes'])
+                
+                if count: break
 
     
     def __add_links(self, loc: Locator, links: List[LinkConfig]) -> None:
