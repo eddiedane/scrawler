@@ -1,11 +1,23 @@
-"""Utility helper functions"""
-
 import re, inspect
 from typing import Any, Dict, List, Literal, Set
 
 
 def is_file_type(typ: Literal['yaml', 'json'], filename: str) -> bool:
-    """Check for limited file types (json and yaml), appropriate for configs"""
+    """
+    Checks if a given filename matches a specific file type.
+
+    Parameters
+    ----------
+    typ : Literal['yaml', 'json']
+        The type of file to check.
+    filename : str
+        The name of the file to check.
+
+    Returns
+    -------
+    bool
+        True if the filename matches the given type, False otherwise.
+    """
 
     if re.search(r'[^.]*\.(yaml|yml)$', filename) and typ == 'yaml':
         return True
@@ -16,6 +28,22 @@ def is_file_type(typ: Literal['yaml', 'json'], filename: str) -> bool:
 
 
 def pick(obj: Dict, key_map: Set | Dict[str, str] = {}) -> Dict:
+    """
+    Selectively pick a subset of keys from given dictionary into a new
+    dictionary. If key_map is a set, it is treated as a set of keys to pick,
+    and the resulting dictionary will use the same key names. If key_map is
+    a dictionary, the keys in obj will be remapped to the corresponding values
+    in key_map.
+
+    Args:
+        obj (Dict): The dictionary to pick from
+        key_map (Set | Dict[str, str], optional): The set of keys or dictionary of key mappings.
+            Defaults to {}.
+
+    Returns:
+        Dict: The resulting dictionary with the picked keys
+    """
+
     _obj = {}
     
     if type(key_map) is set:
@@ -38,6 +66,16 @@ def pick(obj: Dict, key_map: Set | Dict[str, str] = {}) -> Dict:
         
 
 def is_numeric(val: Any) -> bool:
+    """
+    Checks if given value can be converted to a float.
+
+    Args:
+        val (Any): The value to check.
+
+    Returns:
+        bool: True if the value can be converted to a float, False otherwise.
+    """
+    
     try:
         float(val)
         return True
@@ -46,6 +84,16 @@ def is_numeric(val: Any) -> bool:
     
 
 def count_required_args(func):
+    """
+    Counts the number of required arguments in a function.
+
+    Args:
+        func: The function to inspect.
+
+    Returns:
+        int: The number of required arguments.
+    """
+    
     # Get the signature of the function
     sig = inspect.signature(func)
     # Count the number of required arguments
@@ -59,6 +107,17 @@ def count_required_args(func):
 
 
 def is_none_keys(obj: Dict, *keys) -> bool:
+    """
+    Checks if all given keys in the object are None.
+
+    Args:
+        obj (Dict): The object to check.
+        *keys: The keys to check.
+
+    Returns:
+        bool: True if all given keys are None, False otherwise.
+    """
+    
     for key in keys:
         if key in obj and obj[key] is not None: return False
     
