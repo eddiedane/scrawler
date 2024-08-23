@@ -37,7 +37,7 @@ def parse_value(string: str, set_defaults: bool = True) -> ParseValueData:
     that are not present in the input string.
     """
     
-    value_re = r'(?:(?P<prop>\w+)(?::child\((?P<child_node>\d+)\))?)\s*(?:@\s*(?:<(?P<ctx>page|parent)(?:\.(?P<max>all|first))?>)?(?P<selector>[^|<]+))?(?:\s*\|\s*(?P<utils>\w+(?:\s+[^>]+)*))*\s*(?:>>\s*(?P<var>\w+))?'
+    value_re = r'(?:(?P<prop>\w+)(?::child\((?P<child_node>\d+)\))?)\s*(?:@\s*(?:<(?P<ctx>page|parent)(?:\.(?P<max>all|one))?>)?(?P<selector>[^|<]+))?(?:\s*\|\s*(?P<utils>\w+(?:\s+[^>]+)*))*\s*(?:>>\s*(?P<var>\w+))?'
     match = re.fullmatch(value_re, string)
 
     if not match:
