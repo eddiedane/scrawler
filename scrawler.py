@@ -326,8 +326,8 @@ class Scrawler():
     
 
     def __var(self, name: str, default: Any = None) -> Any:
-        result = notation.parse_value(name)
-
+        result = notation.parse_value(name, set_defaults=False)
+        print('Var Result:', result)
         if not is_none_keys(result, 'child_node', 'ctx', 'max', 'selector'):
             raise ValueError(Fore.RED + 'Invalid $var{...} notation at ' + Fore.CYAN + name + Fore.RESET)
 

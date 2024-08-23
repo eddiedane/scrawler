@@ -7,7 +7,7 @@ ParseValueData = Dict[Literal['prop', 'child_node', 'ctx', 'selector', 'max', 'u
 KeyMatchData = Dict[Literal['is_left_var', 'left_operand', 'operator', 'is_right_var', 'right_operand'], str]
 
 
-def parse_value(string: str) -> ParseValueData:
+def parse_value(string: str, set_defaults: bool = True) -> ParseValueData:
     value_re = r'(?:(?P<prop>\w+)(?::child\((?P<child_node>\d+)\))?)\s*(?:@\s*(?:<(?P<ctx>page|parent)(?:\.(?P<max>all|first))?>)?(?P<selector>[^|<]+))?(?:\s*\|\s*(?P<utils>\w+(?:\s+[^>]+)*))*\s*(?:>>\s*(?P<var>\w+))?'
     match = re.fullmatch(value_re, string)
 
@@ -15,12 +15,14 @@ def parse_value(string: str) -> ParseValueData:
         return {'prop': None, 'ctx': None, 'selector': None, 'utils': None, 'parsed_utils': []}
     
     data: ParseValueData = match.groupdict()
-    data['prop'] = (data['prop'] or '').strip()
-    data['child_node'] = int(data['child_node']) if data['child_node'] else None
-    data['selector'] = (data['selector'] or '').strip()
-    data['utils'] = (data['utils'] or '').strip()
-    data['ctx'] = data['ctx'] or 'parent'
-    data['max'] = data['max'] or 'one'
+    
+    if set_defaults:
+        data['prop'] = (data['prop'] or '').strip()
+        data['child_node'] = int(data['child_node']) if data['child_node'] else None
+        data['selector'] = (data['selector'] or '').strip()
+        data['utils'] = (data['utils'] or '').strip()
+        data['ctx'] = data['ctx'] or 'parent'
+        data['max'] = data['max'] or 'one'
 
     if not data['utils']:
         data['parsed_utils'] = []
