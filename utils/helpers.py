@@ -1,7 +1,7 @@
 """Utility helper functions"""
 
 import re, inspect
-from typing import Any, Dict, Literal, Set
+from typing import Any, Dict, List, Literal, Set
 
 
 def is_file_type(typ: Literal['yaml', 'json'], filename: str) -> bool:

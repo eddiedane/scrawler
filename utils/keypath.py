@@ -45,7 +45,7 @@ def assign(
     _obj = obj
     size = len(path)
     if not size: return _obj
-    
+
     for i, key in enumerate(path):
         if i == size - 1:
             if merge and has_key(_obj, key) and type(_obj[key] == type(value)):
@@ -103,3 +103,17 @@ def has_key(obj, key) -> bool:
         return key in obj
     else:
         return hasattr(obj, key)
+    
+
+def to_string(keypath: List[str | int], delimiter: str = '.') -> str:
+    _keypath = []
+
+    for i, key in enumerate(keypath):
+        if i == 0:
+            _keypath.append(str(key))
+            continue
+
+        if type(key) is int: _keypath.append(f'[{str(key)}]')
+        else: _keypath.append(delimiter + str(key))
+
+    return ''.join(_keypath)

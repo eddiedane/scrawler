@@ -2,7 +2,7 @@ r"""Scrawler simplifies scraping on the web"""
 
 
 import json, yaml, re, os
-from colorama import Fore
+from colorama import Fore, Style
 from playwright.sync_api import sync_playwright, Browser, BrowserContext, Locator, Page, Route, TimeoutError
 from slugify import slugify
 from typing import Any, Dict, List, Literal, Tuple
@@ -71,8 +71,6 @@ class Scrawler():
             links = self.__resolve_page_link(pg['link'])
             
             for link in links:
-                print(Fore.GREEN + 'Opening a new page: ' + Fore.BLUE + link['url'] + Fore.RESET)
-
                 page = self.__new_page(link['url'])
                 self.__state['vars'] = link.get('metadata', {})
                 self.__state['vars']['_url'] = page.url
@@ -90,7 +88,8 @@ class Scrawler():
                 else:
                     self.__interact(page, pg.get('nodes', []))
 
-                print(Fore.YELLOW + 'Closing page: ' + Fore.BLUE + link['url'] + Fore.RESET)
+                if self.__config['logging']:
+                    print(Fore.YELLOW + 'Closing page: ' + Fore.BLUE + link['url'] + Fore.RESET)
 
                 for p in self.__browser_context.pages[1:]: p.close()
 
@@ -106,11 +105,15 @@ class Scrawler():
         with open(filepath, 'w') as stream:
 
             if is_file_type('yaml', filepath):
-                print(Fore.GREEN + f'Outputting {state} to YAML: ' + Fore.BLUE + filepath + Fore.RESET)
+                if self.__config['logging']:
+                    print(Fore.GREEN + f'Outputting {state} to YAML: ' + Fore.BLUE + filepath + Fore.RESET)
+
                 yaml.dump(data, stream)
 
             if is_file_type('json', filepath):
-                print(Fore.GREEN + f'Outputting {state} to JSON: ' + Fore.BLUE + filepath + Fore.RESET)
+                if self.__config['logging']:
+                    print(Fore.GREEN + f'Outputting {state} to JSON: ' + Fore.BLUE + filepath + Fore.RESET)
+
                 json.dump(data, stream, indent=2, ensure_ascii=False)
 
 
@@ -139,7 +142,8 @@ class Scrawler():
 
                 locator = page.locator(node['selector'], **loc_kwargs)
 
-                print(Fore.GREEN + 'Interacting with: ' + Fore.WHITE + node['selector'] + Fore.RESET)
+                if self.__config['logging']:
+                    print(Fore.GREEN + 'Interacting with: ' + Fore.WHITE + Style.DIM + node['selector'] + Style.NORMAL + Fore.RESET)
 
                 if 'wait' in node:
                     try: locator.wait_for(timeout=node['wait'])
@@ -215,8 +219,6 @@ class Scrawler():
 
                     value[key] = self.__attribute(attr, loc)
 
-            print(Fore.GREEN + 'Extracting data' + Fore.RESET)
-
             value = [value] if all else value
 
             if type(value) is list and value[0] is None: value = []
@@ -227,6 +229,9 @@ class Scrawler():
                 self.__state['vars'],
                 resolve_key=notation.find_item_key
             )
+
+            if self.__config['logging']:
+                print(Fore.GREEN + 'Extracting data to ' + Fore.CYAN + keypath.to_string(scope) + Fore.RESET)
 
             keypath.assign(value, self.__state['data'], scope, merge=True)
 
@@ -251,7 +256,7 @@ class Scrawler():
             for _ in range(count):
                 if 'delay' in action: loc.page.wait_for_timeout(action['delay'])
 
-                if not loc.is_visible():
+                if not loc.is_visible() and self.__config['logging']:
                     print(Fore.YELLOW + 'Action may fail due to node being inaccessible or not visible: ' + Fore.WHITE + f'{self.__state['vars']['_node']}@{action['type']}')
                 
                 if action.get('dispatch', False) and t not in ['swipe_left', 'swipe_right']:
@@ -327,7 +332,7 @@ class Scrawler():
 
     def __var(self, name: str, default: Any = None) -> Any:
         result = notation.parse_value(name, set_defaults=False)
-        print('Var Result:', result)
+
         if not is_none_keys(result, 'child_node', 'ctx', 'max', 'selector'):
             raise ValueError(Fore.RED + 'Invalid $var{...} notation at ' + Fore.CYAN + name + Fore.RESET)
 
@@ -402,7 +407,8 @@ class Scrawler():
 
 
     def __close_browser(self):
-        print(Fore.YELLOW + 'Closing browser' + Fore.RESET)
+        if self.__config['logging']:
+            print(Fore.YELLOW + 'Closing browser' + Fore.RESET)
 
         self.__browser_context.pages[0].close()
         self.__browser_context.close()
@@ -410,6 +416,9 @@ class Scrawler():
 
 
     def __new_page(self, url: str) -> Page:
+        if self.__config['logging']:
+            print(Fore.GREEN + Style.BRIGHT + 'Opening a new page: ' + Style.NORMAL + Fore.BLUE + url + Fore.RESET)
+
         page = self.__browser_context.new_page()
         browser_config = self.__config.get('browser', {})
         viewport: List = browser_config.get('viewport', [])
