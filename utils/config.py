@@ -38,7 +38,7 @@ def validate(config: Dict) -> Dict:
     if 'scrawl' in config:
         s = config['scrawl']
         
-        if type(s) is not dict:
-            raise ValueError(Fore.RED + 'Invalid configuration value at ' + Fore.CYAN + 'scrawl, ' + Fore.RED + 'expected a object')
+        if type(s) is not list:
+            raise ValueError(Fore.RED + 'Invalid configuration value at ' + Fore.CYAN + 'scrawl, ' + Fore.RED + 'expected a list of pages objects')
 
     return config

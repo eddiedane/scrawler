@@ -62,12 +62,12 @@ class Scrawler():
         raise ValueError(Fore.RED + 'Unable to load unsupported config file type, ' + Fore.BLUE + filename + Fore.RESET)
 
 
-    def __scrawl(self):
+    def __scrawl(self) -> None:
         self.__launch_browser()
 
-        if 'scrawl' not in self.__config or 'pages' not in self.__config['scrawl']: return
+        if 'scrawl' not in self.__config: return
 
-        for pg in self.__config['scrawl']['pages']:
+        for pg in self.__config['scrawl']:
             links = self.__resolve_page_link(pg['link'])
             
             for link in links:
