@@ -12,7 +12,7 @@ from utils.helpers import is_file_type, pick, is_numeric, is_none_keys
 
 
 Config = Dict[Literal['browser', 'scrawl'], Dict]
-NodeConfig = Dict[Literal['selector', 'all', 'range', 'links', 'data', 'nodes', 'actions', 'wait'], int | str | bool | List | Dict]
+NodeConfig = Dict[Literal['selector', 'all', 'range', 'links', 'data', 'nodes', 'actions', 'wait', 'contains'], int | str | bool | List | Dict]
 LinkConfig = Dict[Literal['name', 'url', 'metadata'], str | Dict[str, Any]]
 DataConfig = Dict[Literal['scope', 'value'], str | List[str] | Dict[str, Any]]
 ActionConfig = Dict[Literal['type', 'delay', 'wait', 'screenshot', 'dispatch', 'count'], str | int | bool]
@@ -129,7 +129,13 @@ class Scrawler():
             print(Fore.GREEN + 'Interacting with: ' + Fore.WHITE + node['selector'] + Fore.RESET)
             
             self.__state['vars']['_node'] = re.sub(':', '-', node.get('name', node['selector']))
-            locator = page.locator(node['selector'])
+            loc_kwargs = {}
+
+            if 'contains' in node: loc_kwargs['has_text'] = node['contains']
+
+            if 'excludes' in node: loc_kwargs['has_not_text'] = node['excludes']
+
+            locator = page.locator(node['selector'], **loc_kwargs)
 
             if 'wait' in node:
                 try: locator.wait_for(timeout=node['wait'])
