@@ -1,0 +1,50 @@
+browser:
+  type: chromium
+  show: true
+  timeout: 120000
+  slowdown: 500
+  ready_on: load
+  viewport: [1920, 1080]
+  block: [document, stylesheet, image, media, font, script, xhr, fetch, websocket, manifest, other]
+logging: true
+scrawl:
+  - link: https://example.com
+    repeat:
+      # either times or while
+      times: 1
+      while:
+        selector: BUTTON
+        disabled: true
+        exists: true
+    nodes:
+      - selector: SECTION > A
+        all: true
+        range: [0, -1, 1]
+        # either contains or excludes
+        contains: Text1
+        excludes: Text2
+        show: false
+        wait: 2000
+        actions:
+          - type: click
+            dispatch: true
+            delay: 1000
+            wait: 3000
+            count: 1 # or $attr{count}
+            screenshot: images/$var{section_name}$var{_nth}.png
+            options:
+              buttons: left
+              modifiers: Meta
+        links:
+          name: section_links
+          value: $attr{href}
+          metadata:
+            section_name: $attr{text@<page>SECTION > H2}
+        data:
+          name: sections
+          value:
+            url: $attr{href}
+            title: $attr{text}
+            slug: $attr{text | slug}
+        nodes: []
+  

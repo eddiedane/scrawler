@@ -1,4 +1,11 @@
-r"""Scrawler simplifies scraping on the web"""
+r"""**Scrawler**: Web scraping made simple—just configure and collect.
+
+    Scrawler makes web crawling and scraping more easier.
+    With simple configuration, 
+    that can be provide directly or as configuration files like JSON or YAML,
+    you can set your parameters and let Scrawler handle the rest.
+    It’s a straightforward tool designed to get you the data you need without the hassle of coding.
+"""
 
 
 import json, yaml, re, os
