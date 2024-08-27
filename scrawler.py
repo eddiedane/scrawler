@@ -146,10 +146,11 @@ class Scrawler():
                 page = self.__new_page(link['url'])
                 self.__state['vars'] = link.get('metadata', {})
                 self.__state['vars']['_url'] = page.url
+
+                nodes = repeat.get('nodes', [])
                 
                 if 'repeat' in pg:
                     repeat = pg['repeat']
-                    nodes = repeat.get('nodes', [])
 
                     if 'times' in repeat:
                         for i in range(repeat['times']):
@@ -158,7 +159,7 @@ class Scrawler():
                         while self.__should_repeat(page, repeat['while']):
                             self.__interact(page, nodes)
                 else:
-                    self.__interact(page, pg.get('nodes', []))
+                    self.__interact(page, nodes)
 
                 if self.__config['logging']:
                     print(Fore.YELLOW + 'Closing page: ' + Fore.BLUE + link['url'] + Fore.RESET)
