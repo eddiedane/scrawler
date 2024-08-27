@@ -1,5 +1,3 @@
-configs
 venv
 __pycache__
-
-pg.py
+playground
