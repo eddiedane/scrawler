@@ -161,7 +161,7 @@ class Scrawler():
                 else:
                     self.__interact(page, nodes)
 
-                if self.__config['logging']:
+                if self.__config.get('logging', False):
                     print(Fore.YELLOW + 'Closing page: ' + Fore.BLUE + link['url'] + Fore.RESET)
 
                 for p in self.__browser_context.pages[1:]: p.close()
@@ -189,13 +189,13 @@ class Scrawler():
         with open(filepath, 'w') as stream:
 
             if is_file_type('yaml', filepath):
-                if self.__config['logging']:
+                if self.__config.get('logging', False):
                     print(Fore.GREEN + f'Outputting {state} to YAML: ' + Fore.BLUE + filepath + Fore.RESET)
 
                 yaml.dump(data, stream)
 
             if is_file_type('json', filepath):
-                if self.__config['logging']:
+                if self.__config.get('logging', False):
                     print(Fore.GREEN + f'Outputting {state} to JSON: ' + Fore.BLUE + filepath + Fore.RESET)
 
                 json.dump(data, stream, indent=2, ensure_ascii=False)
@@ -259,7 +259,7 @@ class Scrawler():
 
                 locator = page.locator(node['selector'], **loc_kwargs)
 
-                if self.__config['logging']:
+                if self.__config.get('logging', False):
                     print(Fore.GREEN + 'Interacting with: ' + Fore.WHITE + Style.DIM + node['selector'] + Style.NORMAL + Fore.RESET)
 
                 if 'wait' in node:
@@ -369,7 +369,7 @@ class Scrawler():
                 resolve_key=notation.find_item_key
             )
 
-            if self.__config['logging']:
+            if self.__config.get('logging', False):
                 print(Fore.GREEN + 'Extracting data to ' + Fore.CYAN + keypath.to_string(scope) + Fore.RESET)
 
             keypath.assign(value, self.__state['data'], scope, merge=True)
@@ -413,7 +413,7 @@ class Scrawler():
             for _ in range(count):
                 if 'delay' in action: loc.page.wait_for_timeout(action['delay'])
 
-                if not loc.is_visible() and self.__config['logging']:
+                if not loc.is_visible() and self.__config.get('logging', False):
                     print(Fore.YELLOW + 'Action may fail due to node being inaccessible or not visible: ' + Fore.WHITE + f'{self.__state['vars']['_node']}@{action['type']}')
                 
                 if action.get('dispatch', False) and t not in ['swipe_left', 'swipe_right']:
@@ -658,7 +658,7 @@ class Scrawler():
             None
         """
         
-        if self.__config['logging']:
+        if self.__config.get('logging', False):
             print(Fore.YELLOW + 'Closing browser' + Fore.RESET)
 
         self.__browser_context.pages[0].close()
@@ -677,7 +677,7 @@ class Scrawler():
             Page: The opened page.
         """
         
-        if self.__config['logging']:
+        if self.__config.get('logging', False):
             print(Fore.GREEN + Style.BRIGHT + 'Opening a new page: ' + Style.NORMAL + Fore.BLUE + url + Fore.RESET)
 
         page = self.__browser_context.new_page()
