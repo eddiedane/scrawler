@@ -20,7 +20,6 @@ scrawl:
       - selector: SECTION > A
         all: true
         range: [0, -1, 1]
-        # either contains or excludes
         contains: Text1
         excludes: Text2
         show: false

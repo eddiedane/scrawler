@@ -147,7 +147,11 @@ class Scrawler():
                 self.__state['vars'] = link.get('metadata', {})
                 self.__state['vars']['_url'] = page.url
 
-                nodes = repeat.get('nodes', [])
+                nodes = pg.get('nodes', [])
+
+                if not len(nodes):
+                    self.__close_pages()
+                    continue
                 
                 if 'repeat' in pg:
                     repeat = pg['repeat']
@@ -161,10 +165,7 @@ class Scrawler():
                 else:
                     self.__interact(page, nodes)
 
-                if self.__config.get('logging', False):
-                    print(Fore.YELLOW + 'Closing page: ' + Fore.BLUE + link['url'] + Fore.RESET)
-
-                for p in self.__browser_context.pages[1:]: p.close()
+                self.__close_pages()
 
 
     def __output(self, filepath: str, state: str = 'data') -> None:
@@ -405,7 +406,8 @@ class Scrawler():
 
             count = action.get('count', 1)
 
-            if type(count) is str: count = self.__evaluate(count, loc)
+            if type(count) is str:
+                count = int(self.__evaluate(count, loc))
 
             t: str = action['type']
             rect: DOMRect = loc.evaluate("node => node.getBoundingClientRect()")
@@ -466,7 +468,7 @@ class Scrawler():
         Returns:
             str | List[str]: The evaluated string.
         """
-        
+        list_string = []
         getters = notation.parse_getters(string)
 
         for full_match, typ, var_name in getters:
@@ -476,9 +478,12 @@ class Scrawler():
                 case 'attr': value = self.__attribute(var_name, loc)
                 case 'var': value = str(self.__var(var_name, full_match))
 
-            string = re.sub(re.escape(full_match), value, string)
+            if type(value) is not list:
+                string = re.sub(re.escape(full_match), str(value), string)
+            else:
+                list_string += value
 
-        return string
+        return string if not len(list_string) else list_string
     
 
     def __apply_utils(self, utils: List[Tuple[str, List]], val: str):   
@@ -593,9 +598,10 @@ class Scrawler():
             value = None
 
             if attr in ['href', 'src', 'text']:
-                if attr == 'text': attr = 'textContent'
-
-                value = loc.evaluate(f'(node, [childNode, attr]) => childNode ? node.childNodes[childNode - 1][attr] : node[attr]', [child_node, attr])
+                value = loc.evaluate(
+                    '(node, [childNode, attr]) => childNode ? node.childNodes[childNode - 1][attr] : node[attr]',
+                    [child_node, 'textContent' if attr == 'text' else attr]
+                )
 
             if len(utils): 
                 value = self.__apply_utils(utils, value)
@@ -708,6 +714,15 @@ class Scrawler():
         page.goto(url, **kwargs)
 
         return page
+    
+
+    def __close_pages(self, start: int = 1, end: int = None) -> None:
+        if self.__config.get('logging', False):
+            pages_url = [page.url for page in self.__browser_context.pages]
+
+            print(Fore.YELLOW + 'Closing page: ' + Fore.BLUE + ', '.join(pages_url) + Fore.RESET)
+
+        for p in self.__browser_context.pages[slice(start, end, 1)]: p.close()
 
 
     def __block_request(self, route: Route, types: List[str]) -> None:  
