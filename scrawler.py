@@ -156,11 +156,11 @@ class Scrawler():
                 if 'repeat' in pg:
                     repeat = pg['repeat']
 
-                    if 'times' in repeat:
-                        for i in range(repeat['times']):
+                    if type(repeat) is int:
+                        for _ in range(repeat):
                             self.__interact(page, nodes)
-                    elif 'while' in repeat:
-                        while self.__should_repeat(page, repeat['while']):
+                    elif type(repeat) is dict:
+                        while self.__should_repeat(page, repeat):
                             self.__interact(page, nodes)
                 else:
                     self.__interact(page, nodes)
@@ -717,12 +717,14 @@ class Scrawler():
     
 
     def __close_pages(self, start: int = 1, end: int = None) -> None:
+        page_slice: slice = slice(start, end, 1)
+
         if self.__config.get('logging', False):
-            pages_url = [page.url for page in self.__browser_context.pages]
+            pages_url = [page.url for page in self.__browser_context.pages[page_slice]]
 
             print(Fore.YELLOW + 'Closing page: ' + Fore.BLUE + ', '.join(pages_url) + Fore.RESET)
 
-        for p in self.__browser_context.pages[slice(start, end, 1)]: p.close()
+        for p in self.__browser_context.pages[page_slice]: p.close()
 
 
     def __block_request(self, route: Route, types: List[str]) -> None:  
